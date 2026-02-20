@@ -1,0 +1,38 @@
+#include "AutoPilot.h"
+#include "../State.h"
+#include "../core/Transition.h"
+#include "SettingsManager.h"
+
+namespace AutoPilot {
+    uint32_t lastSwitchTime = 0;
+    const uint32_t CYCLE_TIME_MS = 30000; // Switch every 30s
+    bool armed = false;
+
+    // Playlist adjusted to match the 10 modes defined in ModeManager (0-9)
+    uint8_t playlist[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}; 
+    uint8_t playlistIndex = 0;
+
+    void tick() {
+        if (currentPlayMode != PlayMode::AUTOPILOT) return;
+
+        if (millis() - lastSwitchTime > CYCLE_TIME_MS) {
+            armed = true; 
+        }
+
+        // Only switch when a beat is detected for maximum impact
+        if (armed && beatDetected) {
+            Transition::trigger(); 
+            
+            playlistIndex = (playlistIndex + 1) % (sizeof(playlist) / sizeof(playlist[0]));
+            ACTIVE_MODE_INT = playlist[playlistIndex];
+            
+            // Sync to memory so it remembers the mode if power is lost
+            SettingsManager::save(); 
+            
+            lastSwitchTime = millis();
+            armed = false;
+            Serial.print("AutoPilot: Switching to mode ");
+            Serial.println(ACTIVE_MODE_INT);
+        }
+    }
+}
