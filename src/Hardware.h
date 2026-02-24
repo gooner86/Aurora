@@ -20,7 +20,7 @@ const bool SERPENTINE = true;
 // =====================
 #define MIC_BCLK    26
 #define MIC_WS      25
-#define MIC_SD      32  // MOVED from 33 (33 is often used for ADC/Touch)
+#define MIC_SD      32 
 
 // =====================
 // AUDIO INPUT 2 (LINE-IN PCM1808) - I2S_1
