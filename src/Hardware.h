@@ -10,7 +10,7 @@
 #define LED_TYPE    WS2812B
 #define COLOR_ORDER GRB
 
-const int TUBES = 11;
+const int TUBES = 13;
 const int H     = 9;
 const int NUM_LEDS = TUBES * H;
 const bool SERPENTINE = true;

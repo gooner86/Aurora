@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aurora BLE Control</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        select, button { margin: 10px; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Aurora Controller</h1>
+    <p>Connect via BLE and control the device.</p>
+
+    <label for="modeSelect">Select Mode:</label>
+    <select id="modeSelect">
+        <option value="0">AURORA V1</option>
+        <option value="1">EQ SPECTRUM</option>
+        <option value="2">VACUUM TUBE</option>
+        <option value="3">AURORA V2</option>
+        <option value="4">RAINBOW FLOW</option>
+        <option value="5">SOLID COLOR</option>
+        <option value="6">AURORA V3</option>
+        <option value="7">NIGHT RAIN</option>
+        <option value="8">DEEP OCEAN</option>
+        <option value="9">IBIZA SUNSET</option>
+    </select>
+    <button onclick="sendMode()">Set Mode</button>
+
+    <!-- Add other controls for brightness, sensitivity, etc. -->
+    <!-- Include BLE connection logic here -->
+
+    <script>
+        // Placeholder for BLE connection and sending data
+        function sendMode() {
+            const mode = document.getElementById('modeSelect').value;
+            // Send mode via BLE characteristic "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+            console.log('Sending mode:', mode);
+        }
+    </script>
+</body>
+</html>

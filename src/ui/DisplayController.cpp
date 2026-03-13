@@ -22,14 +22,14 @@ namespace DisplayController {
         switch(modeInt) {
             case 0: return "AURORA V1";
             case 1: return "EQ SPECTRUM";
-            case 2: return "RAINBOW FLOW";
+            case 2: return "VACUUM TUBE";
             case 3: return "AURORA V2";
-            case 4: return "SOLID COLOR";
+            case 4: return "RAINBOW FLOW";
+            case 5: return "SOLID COLOR";
             case 6: return "AURORA V3";
-            case 7: return "VACUUM TUBE";
-            case 8: return "NIGHT RAIN";
-            case 9: return "DEEP OCEAN";
-            case 10: return "IBIZA SUNSET";
+            case 7: return "NIGHT RAIN";
+            case 8: return "DEEP OCEAN";
+            case 9: return "IBIZA SUNSET";
             default: return "UNKNOWN";
         }
     }
