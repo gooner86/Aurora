@@ -88,8 +88,12 @@ void setup() {
     // Respect loaded settings instead of forcing a mode here
 
     DisplayController::init(); 
-    MicInput::init();    
-    LineInput::init();   
+    // Initialize only the selected audio input to avoid I2S driver conflicts
+    if (currentAudio == AudioSource::MIC_IN) {
+        MicInput::init();
+    } else if (currentAudio == AudioSource::LINE_IN) {
+        LineInput::init();
+    }
     ModeManager::init();
     PhysicalControls::init();
     BLEController::init();

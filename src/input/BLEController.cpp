@@ -3,10 +3,13 @@
 #include "../State.h"
 #include "../sys/SettingsManager.h"
 #include "../sys/AutoPilot.h"
+#include "../audio/MicInput.h"
+#include "../audio/LineInput.h"
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#include <FastLED.h>
 
 // Match the Service UUID used in sarna.digital/aurora
 #define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
@@ -36,6 +39,9 @@ namespace BLEController {
             // 2. Brightness
             else if (uuid == "8ec5b223-231d-4467-b50a-ee23e61827b9") {
                 USER_BRIGHTNESS = (uint8_t)constrain(val.toInt(), 5, 255);
+                // Sync the runtime brightness so the change is immediate
+                globalBrightness = USER_BRIGHTNESS;
+                FastLED.setBrightness(globalBrightness);
             }
             
             // 3. Sensitivity
@@ -61,8 +67,14 @@ namespace BLEController {
             else if (uuid == "a7913500-1111-4444-8888-999999999999") {
                 if (val == "PWR:AWAKE")        currentPower = PowerState::AWAKE;
                 else if (val == "PWR:STANDBY")  currentPower = PowerState::STANDBY;
-                else if (val == "SRC:MIC")      currentAudio = AudioSource::MIC_IN;
-                else if (val == "SRC:LINE")     currentAudio = AudioSource::LINE_IN;
+                else if (val == "SRC:MIC") {
+                    currentAudio = AudioSource::MIC_IN;
+                    MicInput::init();
+                }
+                else if (val == "SRC:LINE") {
+                    currentAudio = AudioSource::LINE_IN;
+                    LineInput::init();
+                }
                 else if (val == "SRC:OFF")      currentAudio = AudioSource::OFF;
                 else if (val == "PLAY:AUTO")    currentPlayMode = PlayMode::AUTOPILOT;
                 else if (val == "PLAY:MAN")     currentPlayMode = PlayMode::MANUAL;

@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0a">
+  <title>Aurora Controller</title>
+  <style>
+    :root {
+      --primary: #00ffcc;
+      --secondary: #bd00ff;
+      --bg-dark: #050505;
+      --glass: rgba(255, 255, 255, 0.03);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --text-main: #ffffff;
+      --text-muted: #888888;
+      --card-spacing: 24px;
+    }
+    @keyframes auroraFlow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulseGlow { 0% { box-shadow: 0 0 15px rgba(0,255,204,0.1); } 50% { box-shadow: 0 0 30px rgba(0,255,204,0.4); } 100% { box-shadow: 0 0 15px rgba(0,255,204,0.1); } }
+    body {
+      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(-45deg, #020205, #120c24, #05181c, #000000);
+      background-size: 400% 400%;
+      animation: auroraFlow 25s ease infinite;
+      color: var(--text-main);
+      margin: 0; height: 100vh; width: 100vw; overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body::before {
+      content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0;
+    }
+    #landing-view { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 20; transition: opacity 0.5s ease; }
+    #app-view { position: relative; z-index: 10; width: 100%; max-width: 440px; margin: 0 auto; height: 100%; overflow-y: auto; padding: 20px; box-sizing: border-box; display: none; opacity: 0; }
+    #app-view.visible { display: block; animation: fadeInUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+    .hero-vinyl { width: 220px; height: 220px; filter: drop-shadow(0 0 30px rgba(0, 255, 204, 0.15)); animation: spin 12s linear infinite; margin-bottom: 40px; }
+    .hero-title { font-size: 42px; font-weight: 200; letter-spacing: 8px; text-transform: uppercase; margin: 0 0 10px 0; background: linear-gradient(to right, #fff, #00ffcc); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 20px rgba(0,255,204,0.3); }
+    .hero-subtitle { color: var(--text-muted); font-size: 14px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 60px; }
+    .btn-hero { background: rgba(255,255,255,0.05); backdrop-filter: blur(10px); border: 1px solid var(--primary); color: var(--primary); padding: 18px 50px; border-radius: 50px; font-size: 16px; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 0 15px rgba(0,255,204,0.1); animation: pulseGlow 3s infinite; }
+    .btn-hero:hover { background: rgba(0,255,204,0.1); transform: scale(1.05); }
+    .btn-hero:active { transform: scale(0.95); background: var(--primary); color: #000; }
+    .app-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-top: 10px; }
+    .mini-brand { display: flex; align-items: center; gap: 12px; }
+    .mini-vinyl { width: 40px; height: 40px; animation: spin 4s linear infinite; }
+    .mini-title { font-size: 20px; font-weight: 700; letter-spacing: 2px; color: #fff; margin: 0; }
+    .status-dot { width: 6px; height: 6px; background: var(--primary); border-radius: 50%; box-shadow: 0 0 8px var(--primary); display: inline-block; margin-left: 8px;}
+    .glass-card { background: var(--glass); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border: 1px solid var(--glass-border); border-radius: 24px; padding: 24px; margin-bottom: var(--card-spacing); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+    label { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 1px; margin-bottom: 15px; text-transform: uppercase; }
+    .val-readout { color: var(--primary); font-family: 'Courier New', monospace; font-size: 14px; font-weight: 700; }
+    .select-wrapper { position: relative; }
+    .select-wrapper::after { content: '▼'; position: absolute; right: 15px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--primary); pointer-events: none; }
+    select { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; padding: 16px; border-radius: 14px; font-size: 16px; appearance: none; outline: none; font-family: inherit; }
+    input[type=range] { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; outline: none; appearance: none; -webkit-appearance: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; background: #0a0a0a; border: 2px solid var(--primary); border-radius: 50%; box-shadow: 0 0 10px var(--primary); cursor: pointer; margin-top: -8px; }
+    input[type=color] { width: 100%; height: 50px; border: none; background: none; border-radius: 12px; cursor: pointer; }
+    .btn-disconnect { background: transparent; border: 1px solid #333; color: #666; padding: 15px; width: 100%; border-radius: 15px; font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 10px; margin-bottom: 40px; transition: 0.2s; }
+    .btn-disconnect:hover { border-color: #ff4444; color: #ff4444; background: rgba(255,0,0,0.05); }
+    .hidden { display: none !important; }
+    .viz-preview {
+      width: 100%;
+      height: 80px;
+      background: rgba(0,0,0,0.30);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px;
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;      padding: 10px;
+      margin-top: 15px;
+      overflow: hidden;
+      position: relative;
+    }
+    .viz-tube {
+      flex: 1;
+      min-height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(to top, rgba(255,255,255,0.10), rgba(255,255,255,0.06));
+      transition: height 0.2s ease;
+    }
+    .viz-preview.mode-aurora .viz-tube {
+      filter: blur(0.4px);
+      box-shadow: 0 0 18px rgba(0,255,204,0.08);
+    }
+  </style>
+</head>
+<body>
+  <div id="landing-view">
+    <svg class="hero-vinyl" viewBox="0 0 100 100">
+      <defs>
+        <linearGradient id="labelGradHero" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#bd00ff;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#00ffcc;stop-opacity:1" />
+        </linearGradient>
+      </defs>
+      <circle cx="50" cy="50" r="48" fill="#080808" stroke="#111" stroke-width="1"/>
+      <circle cx="50" cy="50" r="40" fill="none" stroke="#222" stroke-width="2"/>
+      <circle cx="50" cy="50" r="32" fill="none" stroke="#222" stroke-width="2"/>
+      <circle cx="50" cy="50" r="24" fill="none" stroke="#222" stroke-width="2"/>
+      <circle cx="50" cy="50" r="18" fill="url(#labelGradHero)"/>
+      <circle cx="50" cy="50" r="3" fill="#000"/>
+      <path d="M 50 2 A 48 48 0 0 1 98 50" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="4" stroke-linecap="round"/>
+    </svg>
+    <h1 class="hero-title">AURORA</h1>
+    <div class="hero-subtitle">High Fidelity Audio Visualiser</div>
+    <button class="btn-hero" onclick="connectBLE()">Connect</button>
+  </div>
+  <div id="app-view">
+    <div class="app-header">
+      <div class="mini-brand">
+        <svg class="mini-vinyl" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="48" fill="#111" stroke="#222"/>
+          <circle cx="50" cy="50" r="18" fill="url(#labelGradHero)"/>
+          <circle cx="50" cy="50" r="3" fill="#000"/>
+        </svg>
+        <h2 class="mini-title">AURORA <span class="status-dot"></span></h2>
+      </div>
+    </div>
+    <div class="glass-card">
+      <label>Visual Experience</label>
+      <div class="select-wrapper">
+        <select id="modeSelect" onchange="changeMode()">
+          <option value="0">AURORA V1</option>
+        <option value="1">EQ SPECTRUM</option>
+        <option value="2">VACUUM TUBE</option>
+        <option value="3">AURORA V2</option>
+        <option value="4">RAINBOW FLOW</option>
+        <option value="5">SOLID COLOR</option>
+        <option value="6">AURORA V3</option>
+        <option value="7">NIGHT RAIN</option>
+        <option value="8">DEEP OCEAN</option>
+        <option value="9">IBIZA SUNSET</option>
+        </select>
+      </div>
+      <div class="viz-preview mode-raw" id="vizPreview" aria-label="Mode colour preview">
+        <div class="viz-tube"></div><div class="viz-tube"></div><div class="viz-tube"></div><div class="viz-tube"></div><div class="viz-tube"></div>
+        <div class="viz-tube"></div><div class="viz-tube"></div><div class="viz-tube"></div><div class="viz-tube"></div><div class="viz-tube"></div>
+        <div class="viz-tube"></div>
+      </div>
+    </div>
+    <div class="glass-card">
+      <label>Master Brightness <span id="valBright" class="val-readout">90</span></label>
+      <input type="range" id="brightSlider" min="5" max="255" value="90" oninput="updateVal('valBright', this.value)" onchange="sendBrightness()">
+    </div>
+    <div class="glass-card" id="contextPanel">
+      <label>Audio Sensitivity <span id="valSens" class="val-readout">1.0</span></label>
+      <input type="range" id="sensSlider" min="0.1" max="3.0" step="0.1" value="1.0" oninput="updateVal('valSens', this.value); updateSensitivity()" onchange="updateSensitivity()">
+    </div>
+    <div class="glass-card hidden" id="colorPanel">
+      <label>Solid Color</label>
+      <input type="color" id="solidColor" value="#00ffcc" onchange="sendSolidColor()">
+      <label style="margin-top:15px;">Animation Style</label>
+      <div class="select-wrapper">
+        <select id="solidStyle" onchange="sendSolidColor()">
+          <option value="0" selected>Pulse (Breathing)</option>
+          <option value="1">Bars (Sound Reactive)</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn-disconnect" onclick="disconnectBLE()">Disconnect Device</button>
+  </div>
+<script>
+  const serviceUUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+  const chars = {
+    mode: "beb5483e-36e1-4688-b7f5-ea07361b26a8",
+    bright: "8ec5b223-231d-4467-b50a-ee23e61827b9",
+    sens: "92e42d8c-792f-4122-861f-1335b7193230",
+    color: "0f60c1a0-3333-4444-8888-abcdefabcdef",
+    sleep: "a7913500-1111-4444-8888-999999999999"
+  };
+  const MODES = {
+    0: { family:"aurora" }, // V1
+    1: { family:"raw" },    // EQ
+    2: { family:"aurora" }, // Tube
+    3: { family:"aurora" }, // V2
+    4: { family:"raw" },    // Rainbow
+    5: { family:"raw" },    // Solid
+    6: { family:"aurora" }, // V3
+    7: { family:"aurora" }, // Rain
+    8: { family:"aurora" }, // Ocean
+    9: { family:"aurora" }  // Ibiza
+  };
+  let device, server, service, charMap = {};
+  let currentMode = 1;
+  function updateVal(id,val){ document.getElementById(id).innerText = val; }
+  async function connectBLE(){
+    try{
+      const btn = document.querySelector('.btn-hero');
+      btn.innerText = "Scanning...";
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ name: 'Aurora Controller' }],
+        optionalServices: [serviceUUID]
+      });
+      device.addEventListener('gattserverdisconnected', onDisconnected);
+      btn.innerText = "Linking...";
+      server = await device.gatt.connect();
+      service = await server.getPrimaryService(serviceUUID);
+      for (let k in chars) {
+        try { charMap[k] = await service.getCharacteristic(chars[k]); }
+        catch(e) { charMap[k] = null; }
+      }
+      const landing = document.getElementById('landing-view');
+      const app = document.getElementById('app-view');
+      landing.style.opacity = '0';
+      setTimeout(() => {
+        landing.style.display = 'none';
+        app.style.display = 'block';
+        setTimeout(() => app.classList.add('visible'), 50);
+      }, 500);
+      changeMode();
+      setTimeout(() => btn.innerText = "Connect", 1000);
+    } catch(err){
+      console.error(err);
+      document.querySelector('.btn-hero').innerText = "Failed / Retry";
+    }
+  }
+  function disconnectBLE() {
+    if (device && device.gatt.connected) device.gatt.disconnect();
+    else onDisconnected();
+  }
+  function onDisconnected() {
+    const landing = document.getElementById('landing-view');
+    const app = document.getElementById('app-view');
+    app.classList.remove('visible');
+    setTimeout(() => {
+      landing.style.display = 'flex';
+      setTimeout(() => landing.style.opacity = '1', 10);
+    }, 300);
+  }
+  async function writeChar(key, val) {
+    if (charMap[key]) await charMap[key].writeValue(new TextEncoder().encode(String(val)));
+  }
+  function setPreview(mode) {
+    const meta = MODES[mode] || { family:"raw" };
+    const viz = document.getElementById('vizPreview');
+    viz.className = 'viz-preview mode-' + meta.family;
+    const tubes = [...document.querySelectorAll('.viz-tube')];
+    const heights = {
+      0: [40,55,70,62,76,68,54,46,38,30,26], // V1
+      1: [20,30,45,60,78,68,54,40,30,22,18], // EQ
+      2: [62,62,62,62,62,62,62,62,62,62,62], // Tube
+      3: [55,72,60,78,52,76,58,74,50,70,54], // V2
+      4: [30,40,52,64,76,64,52,40,30,22,18], // Rainbow
+      5: [52,52,52,52,52,52,52,52,52,52,52], // Solid
+      6: [30,44,58,70,78,72,60,48,36,28,22], // V3
+      7: [18,22,26,20,30,24,28,22,26,20,18], // Rain
+      8: [26,34,42,50,62,68,60,48,40,32,26], // Ocean
+      9: [22,28,36,48,62,74,62,48,36,28,22]  // Ibiza
+    };
+    const gradients = {
+      0: ["#050014","#003314","#00ff7a","#8a2be2","#ffd0ff"], // V1
+      1: ["#00ff00","#ccff00","#ffb000","#ff2a00","#ff0000"], // EQ
+      2: ["#120000","#ff3d00","#ff8a00","#ffd0a6","#ffffff"], // Tube
+      3: ["#020018","#3b0070","#00ffd5","#ff146e","#ffffff"], // V2
+      4: ["#ff0066","#ffcc00","#00ffcc","#0066ff","#bd00ff"], // Rainbow
+      5: ["var(--primary)","var(--primary)","var(--primary)","var(--primary)","var(--primary)"], // Solid
+      6: ["#030018","#1b00ff","#00ff8c","#b000ff","#ffe0ff"], // V3
+      7: ["#000015","#002040","#6aa0ff","#b8d5ff","#ffffff"], // Rain
+      8: ["#00000a","#00112a","#003a55","#00b9a7","#b3f0ff"], // Ocean
+      9: ["#000514","#3a0020","#ff4d00","#ffb000","#3a0058"]  // Ibiza
+    };
+    const stops = gradients[mode] || gradients[1];
+    const hs = heights[mode] || heights[1];
+    tubes.forEach((tube, i) => {
+      const a = stops[i % stops.length];
+      const b = stops[(i + 1) % stops.length];
+      const c = stops[(i + 2) % stops.length];
+      tube.style.height = (hs[i] || 40) + "%";
+      tube.style.background = `linear-gradient(to top, ${a}, ${b}, ${c})`;
+    });
+    if (mode === 5) {
+      const hex = document.getElementById('solidColor').value;
+      tubes.forEach((tube) => {
+        tube.style.background = `linear-gradient(to top, rgba(0,0,0,0.25), ${hex})`;
+      });
+    }
+  }
+  async function changeMode(){
+    const m = parseInt(document.getElementById('modeSelect').value);
+    currentMode = m;
+    document.getElementById('colorPanel').classList.toggle('hidden', m !== 5);
+    setPreview(m);
+    await writeChar('mode', m);
+  }
+  async function sendBrightness(){
+    await writeChar('bright', document.getElementById('brightSlider').value);
+  }
+  async function updateSensitivity(){
+    const s = document.getElementById('sensSlider').value;
+    await writeChar('sens', s);
+  }
+  async function sendSolidColor(){
+    const hex = document.getElementById('solidColor').value;
+    const style = document.getElementById('solidStyle').value;
+    await writeChar('color', `${hex},${style}`);
+    if (currentMode === 5) setPreview(5);
+  }
+  window.addEventListener('DOMContentLoaded', () => {
+    setPreview(parseInt(document.getElementById('modeSelect').value));
+  });</script></body></html>
