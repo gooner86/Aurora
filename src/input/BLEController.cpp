@@ -20,11 +20,16 @@ namespace BLEController {
 
             // 1. Mode Change
             if (uuid == "beb5483e-36e1-4688-b7f5-ea07361b26a8") {
-                uint8_t newMode = (uint8_t)val.toInt();
-                if (newMode != ACTIVE_MODE_INT) {
-                    Transition::trigger(); 
-                    ACTIVE_MODE_INT = newMode;
-                    currentPlayMode = PlayMode::MANUAL; 
+                int newMode = val.toInt();
+                // Validate against available modes (0-9)
+                if (newMode >= 0 && newMode <= 9) {
+                    if (newMode != ACTIVE_MODE_INT) {
+                        Transition::trigger(); 
+                        ACTIVE_MODE_INT = newMode;
+                        currentPlayMode = PlayMode::MANUAL; 
+                    }
+                } else {
+                    Serial.printf("BLE: Ignoring out-of-range mode %d\n", newMode);
                 }
             }
             
@@ -68,7 +73,8 @@ namespace BLEController {
                 }
             }
 
-            SettingsManager::save();
+            // Avoid doing NVS writes inside the BLE callback context; mark dirty instead.
+            settingsDirty = true;
         }
     };
 

@@ -19,6 +19,10 @@ namespace ModeManager {
     }
 
     void render() {
+        // Ensure mode is valid to avoid out-of-range lookups
+        if (ACTIVE_MODE_INT < 0 || ACTIVE_MODE_INT > 9) {
+            ACTIVE_MODE_INT = 0;
+        }
         // 1. Snapshot the current frame for the Transition engine 
         if (Transition::isTransitioning()) {
             for (int i = 0; i < NUM_LEDS; i++) {
@@ -45,6 +49,6 @@ namespace ModeManager {
         Transition::applyCrossfade();
 
         // 4. Push to the hardware
-        FastLED.show();
+        // Hardware push is handled centrally in main.loop()
     }
 }

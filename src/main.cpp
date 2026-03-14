@@ -45,6 +45,9 @@ float tubeBandsSmooth[TUBES] = {0};
 float bandBassS = 0.0f, bandMidS = 0.0f, bandHighS = 0.0f, volSmooth = 0.0f, levelSlow = 0.0f;
 bool beatDetected = false;
 
+// Debounced settings save flag (set by BLE/UI, persisted by main loop)
+bool settingsDirty = false;
+
 // ==========================================
 // 2. PALETTE INSTANTIATION
 // ==========================================
@@ -82,7 +85,7 @@ void setup() {
 
     // 2. SUBSYSTEMS
     SettingsManager::init();
-    ACTIVE_MODE_INT = 0; // Force Aurora V1 for setup
+    // Respect loaded settings instead of forcing a mode here
 
     DisplayController::init(); 
     MicInput::init();    
@@ -99,7 +102,6 @@ void setup() {
 void loop() {
     OTAUpdater::tick();
 
-    AudioAnalyzer::update();  
     
     // DEBUG: Print Volume Levels to Serial
     static uint32_t lastVoiceTick = 0;
@@ -127,4 +129,12 @@ void loop() {
     
     FastLED.show();
     yield(); // Vital for ESP32 background tasks
+
+    // Periodically persist settings if they've been changed by BLE/UI
+    static uint32_t lastSettingsSaveTime = 0;
+    if (settingsDirty && (millis() - lastSettingsSaveTime > 1000)) {
+        SettingsManager::save();
+        settingsDirty = false;
+        lastSettingsSaveTime = millis();
+    }
 }

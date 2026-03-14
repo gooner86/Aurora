@@ -46,6 +46,9 @@ extern float volSmooth;
 extern float levelSlow;
 extern bool beatDetected;
 
+// Settings dirty flag for debounced NVS writes
+extern bool settingsDirty;
+
 // =====================
 // PALETTES
 // =====================

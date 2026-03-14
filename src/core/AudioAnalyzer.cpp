@@ -5,14 +5,21 @@
 #define FFT_SAMPLES 1024
 int32_t rawSamples[FFT_SAMPLES];
 
+// Helper: convert raw I2S sample to signed 32-bit sample for analysis.
+// NOTE: The right-shift below reflects the source sample alignment used by MicInput.
+// If you change microphone input format, update this conversion accordingly.
+inline int32_t convertRawSample(int32_t r) {
+    return r >> 14; // preserve existing behavior but make it explicit
+}
+
 namespace AudioAnalyzer {
     void update() {
         if (MicInput::readSamples(rawSamples, FFT_SAMPLES)) {
             double sumAbs = 0;
             
             for (int i = 0; i < FFT_SAMPLES; i++) {
-                // Remove the DC offset and shift
-                int32_t s = rawSamples[i] >> 14; 
+                // Convert and remove DC/format alignment
+                int32_t s = convertRawSample(rawSamples[i]);
                 sumAbs += abs(s);
             }
 

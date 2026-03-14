@@ -26,8 +26,8 @@ namespace AutoPilot {
             playlistIndex = (playlistIndex + 1) % (sizeof(playlist) / sizeof(playlist[0]));
             ACTIVE_MODE_INT = playlist[playlistIndex];
             
-            // Sync to memory so it remembers the mode if power is lost
-            SettingsManager::save(); 
+            // Request a debounced save so we don't write NVS from this context
+            settingsDirty = true;
             
             lastSwitchTime = millis();
             armed = false;
