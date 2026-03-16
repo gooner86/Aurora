@@ -6,6 +6,10 @@ namespace LineInput {
     bool lineOk = false;
 
     void init() {
+        lineOk = false;
+        i2s_driver_uninstall(I2S_NUM_1);
+        i2s_driver_uninstall(I2S_NUM_0);
+
         i2s_config_t i2s_config = {
             .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
             .sample_rate = 44100,

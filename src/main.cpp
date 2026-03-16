@@ -42,8 +42,16 @@ uint8_t bandBass8           = 0;
 float tubeLevel[TUBES]       = {0};
 float tubePeak[TUBES]        = {0};
 float tubeBandsSmooth[TUBES] = {0};
-float bandBassS = 0.0f, bandMidS = 0.0f, bandHighS = 0.0f, volSmooth = 0.0f, levelSlow = 0.0f;
+float tubeMax[TUBES]         = {0};
+
+float bandBassS = 0.0f, bandMidS = 0.0f, bandHighS = 0.0f;
+float volSmooth = 0.0f, volBeat = 0.0f;
+float levelSlow = 0.0f, levelFast = 0.0f;
+float bassEnergy = 0.0f, midEnergy = 0.0f, highEnergy = 0.0f;
+
+float beatThreshold = 1.30f;
 bool beatDetected = false;
+uint32_t lastBeatTime = 0;
 
 // Debounced settings save flag (set by BLE/UI, persisted by main loop)
 bool settingsDirty = false;
@@ -94,6 +102,7 @@ void setup() {
     } else if (currentAudio == AudioSource::LINE_IN) {
         LineInput::init();
     }
+    AudioAnalyzer::init();
     ModeManager::init();
     PhysicalControls::init();
     BLEController::init();

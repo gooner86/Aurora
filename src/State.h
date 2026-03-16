@@ -38,13 +38,21 @@ extern uint8_t bandBass8;
 extern float tubeLevel[TUBES];
 extern float tubePeak[TUBES];
 extern float tubeBandsSmooth[TUBES];
+extern float tubeMax[TUBES];
 
 extern float bandBassS;
 extern float bandMidS;
 extern float bandHighS;
 extern float volSmooth;
+extern float volBeat;
 extern float levelSlow;
+extern float levelFast;
+extern float bassEnergy;
+extern float midEnergy;
+extern float highEnergy;
+extern float beatThreshold;
 extern bool beatDetected;
+extern uint32_t lastBeatTime;
 
 // Settings dirty flag for debounced NVS writes
 extern bool settingsDirty;

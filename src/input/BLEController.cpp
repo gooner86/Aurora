@@ -5,6 +5,7 @@
 #include "../sys/AutoPilot.h"
 #include "../audio/MicInput.h"
 #include "../audio/LineInput.h"
+#include "PhysicalControls.h"
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
@@ -42,11 +43,21 @@ namespace BLEController {
                 // Sync the runtime brightness so the change is immediate
                 globalBrightness = USER_BRIGHTNESS;
                 FastLED.setBrightness(globalBrightness);
+                // Inform the physical controls smoothing code so the pot doesn't immediately override the change
+                PhysicalControls::setBrightnessFromRemote(USER_BRIGHTNESS);
+                // Update the characteristic value and notify subscribers
+                pC->setValue(String(USER_BRIGHTNESS).c_str());
+                pC->notify();
             }
             
             // 3. Sensitivity
             else if (uuid == "92e42d8c-792f-4122-861f-1335b7193230") {
                 MASTER_SENSITIVITY = constrain(val.toFloat(), 0.05f, 3.0f);
+                // Prevent the physical pot from immediately overwriting this BLE-set value
+                PhysicalControls::setSensitivityFromRemote(MASTER_SENSITIVITY);
+                // Update char value and notify if client subscribed
+                pC->setValue(String(MASTER_SENSITIVITY).c_str());
+                pC->notify();
             }
             
             // 4. Solid Color & Style
@@ -96,12 +107,33 @@ namespace BLEController {
         BLEService *pServ = pS->createService(SERVICE_UUID);
 
         auto addC = [&](const char* u) {
-            // Added PROPERTY_WRITE_NR for better performance with browser sliders
-            BLECharacteristic *p = pServ->createCharacteristic(u, 
-                BLECharacteristic::PROPERTY_WRITE | 
-                BLECharacteristic::PROPERTY_WRITE_NR);
+            // Make the characteristic readable and notify-capable so UIs can reflect current state
+            BLECharacteristic *p = pServ->createCharacteristic(u,
+                BLECharacteristic::PROPERTY_READ |
+                BLECharacteristic::PROPERTY_WRITE |
+                BLECharacteristic::PROPERTY_WRITE_NR |
+                BLECharacteristic::PROPERTY_NOTIFY);
             p->setCallbacks(new MyCallbacks());
             p->addDescriptor(new BLE2902());
+
+            // Populate an initial textual value so clients can read current state immediately
+            char buf[64];
+            if (strcmp(u, "beb5483e-36e1-4688-b7f5-ea07361b26a8") == 0) {
+                snprintf(buf, sizeof(buf), "%d", ACTIVE_MODE_INT);
+                p->setValue(buf);
+            } else if (strcmp(u, "8ec5b223-231d-4467-b50a-ee23e61827b9") == 0) {
+                snprintf(buf, sizeof(buf), "%d", USER_BRIGHTNESS);
+                p->setValue(buf);
+            } else if (strcmp(u, "92e42d8c-792f-4122-861f-1335b7193230") == 0) {
+                snprintf(buf, sizeof(buf), "%.3f", MASTER_SENSITIVITY);
+                p->setValue(buf);
+            } else if (strcmp(u, "0f60c1a0-3333-4444-8888-abcdefabcdef") == 0) {
+                // Color as hex string
+                snprintf(buf, sizeof(buf), "#%02X%02X%02X,%d", SOLID_COLOR_VAL.r, SOLID_COLOR_VAL.g, SOLID_COLOR_VAL.b, SOLID_STYLE);
+                p->setValue(buf);
+            } else {
+                p->setValue("");
+            }
         };
 
         addC("beb5483e-36e1-4688-b7f5-ea07361b26a8"); // Mode

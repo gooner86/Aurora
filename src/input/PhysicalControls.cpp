@@ -48,4 +48,25 @@ namespace PhysicalControls {
         float sensFloat = sensMin + ((float)(sensVal - 5) / (255 - 5)) * (sensMax - sensMin);
         MASTER_SENSITIVITY = constrain(sensFloat, sensMin, sensMax);
     }
+
+    void setBrightnessFromRemote(uint8_t val) {
+        // Map the user-facing brightness (5-255) back to ADC raw range (0-4095)
+        int raw = map(val, 5, 255, 0, 4095);
+        smoothedBrightRaw = (float)raw;
+        lastBrightRaw = raw;
+    }
+
+    void setSensitivityFromRemote(float sens) {
+        // Mirror the same mapping used in tick():
+        // pot -> sensVal (5..255) -> sensFloat (sensMin..sensMax)
+        float sensMin = 0.05f;
+        float sensMax = 3.0f;
+        float s = constrain(sens, sensMin, sensMax);
+        // compute intermediate 5..255 value
+        float scaled = 5.0f + ((s - sensMin) / (sensMax - sensMin)) * (255.0f - 5.0f);
+        // map back to raw ADC (0..4095)
+        float ratio = (scaled - 5.0f) / (255.0f - 5.0f);
+        int raw = (int)roundf(ratio * 4095.0f);
+        smoothedSensRaw = (float)raw;
+    }
 }
