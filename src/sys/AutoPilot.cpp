@@ -8,8 +8,8 @@ namespace AutoPilot {
     const uint32_t CYCLE_TIME_MS = 30000; // Switch every 30s
     bool armed = false;
 
-    // Playlist adjusted to match the 10 modes defined in ModeManager (0-9)
-    uint8_t playlist[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}; 
+    // Playlist adjusted to match the 11 modes defined in ModeManager (0-10)
+    uint8_t playlist[] = {0, 3, 6, 10, 8, 9, 5, 2, 7, 1, 4}; 
     uint8_t playlistIndex = 0;
 
     void tick() {

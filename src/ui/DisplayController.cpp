@@ -11,12 +11,18 @@ namespace DisplayController {
 
     Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
+    static int brightnessPercent(uint8_t value) {
+        int clamped = constrain((int)value, 5, 255);
+        return (int)lroundf(((float)(clamped - 5) / 250.0f) * 100.0f);
+    }
+
     // State Tracking
     uint8_t lastMode = 255;
-    uint8_t lastBri = 255;
-    float lastSens = -1.0f;
+    int lastBriPercent = -1;
+    int lastSensTenths = -1;
     AudioSource lastAudio = (AudioSource)99;
     PowerState lastPower = (PowerState)99;
+    PlayMode lastPlayMode = (PlayMode)99;
 
     const char* getModeName(uint8_t modeInt) {
         switch(modeInt) {
@@ -25,11 +31,12 @@ namespace DisplayController {
             case 2: return "VACUUM TUBE";
             case 3: return "AURORA V2";
             case 4: return "RAINBOW FLOW";
-            case 5: return "SOLID COLOR";
+            case 5: return "COLOR VEIL";
             case 6: return "AURORA V3";
             case 7: return "NIGHT RAIN";
             case 8: return "DEEP OCEAN";
             case 9: return "IBIZA SUNSET";
+            case 10: return "PSILO WANDER";
             default: return "UNKNOWN";
         }
     }
@@ -95,19 +102,25 @@ namespace DisplayController {
     }
 
     void update() {
+        int briPercent = brightnessPercent(globalBrightness);
+        int sensTenths = (int)lroundf(MASTER_SENSITIVITY * 10.0f);
+        float displaySensitivity = sensTenths / 10.0f;
+
         if (ACTIVE_MODE_INT == lastMode && 
-            USER_BRIGHTNESS == lastBri && 
-            abs(MASTER_SENSITIVITY - lastSens) < 0.05f && 
+            briPercent == lastBriPercent &&
+            sensTenths == lastSensTenths &&
             currentAudio == lastAudio &&
-            currentPower == lastPower) {
+            currentPower == lastPower &&
+            currentPlayMode == lastPlayMode) {
             return; 
         }
 
         lastMode = ACTIVE_MODE_INT;
-        lastBri = USER_BRIGHTNESS;
-        lastSens = MASTER_SENSITIVITY;
+        lastBriPercent = briPercent;
+        lastSensTenths = sensTenths;
         lastAudio = currentAudio;
         lastPower = currentPower;
+        lastPlayMode = currentPlayMode;
 
         display.clearDisplay();
 
@@ -130,12 +143,11 @@ namespace DisplayController {
         
         display.drawBitmap(0, 0, Icons::sun_16x16, 16, 16, SSD1306_WHITE);
         display.setCursor(20, 4);
-        int briPercent = map(USER_BRIGHTNESS, 5, 255, 0, 100);
         display.print(briPercent); display.print(F("%"));
 
         display.drawBitmap(72, 0, Icons::gauge_16x16, 16, 16, SSD1306_WHITE);
         display.setCursor(92, 4);
-        display.print(MASTER_SENSITIVITY, 1); display.print(F("x"));
+        display.print(displaySensitivity, 1); display.print(F("x"));
 
         display.drawLine(0, 18, 128, 18, SSD1306_WHITE);
 

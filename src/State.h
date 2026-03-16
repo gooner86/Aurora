@@ -25,6 +25,9 @@ extern float MASTER_SENSITIVITY;
 
 extern CRGB SOLID_COLOR_VAL;
 extern uint8_t SOLID_STYLE;
+extern uint8_t PSILO_WANDER;
+extern uint8_t PSILO_BLOOM;
+extern uint8_t PSILO_LUCIDITY;
 
 extern uint32_t sleepStartTime;
 extern uint32_t sleepDurationMs;
@@ -35,6 +38,7 @@ extern CRGB lastFrame[NUM_LEDS];
 
 // Audio & Physics State
 extern uint8_t bandBass8;
+extern float tubeBandsInstant[TUBES];
 extern float tubeLevel[TUBES];
 extern float tubePeak[TUBES];
 extern float tubeBandsSmooth[TUBES];
@@ -70,6 +74,43 @@ extern CRGBPalette16 palIbiza;
 // =====================
 inline float lerpf(float a, float b, float t) { return a + (b - a) * t; }
 inline float clamp01(float x) { return (x < 0) ? 0 : (x > 1 ? 1 : x); }
+
+inline int clampTubeIndex(int t) {
+  if (t < 0) return 0;
+  if (t >= TUBES) return TUBES - 1;
+  return t;
+}
+
+inline float tubeBand(int t) {
+  return tubeBandsSmooth[clampTubeIndex(t)];
+}
+
+inline float tubeBandFast(int t) {
+  return tubeBandsInstant[clampTubeIndex(t)];
+}
+
+inline float tubeBandLevel(int t) {
+  return tubeLevel[clampTubeIndex(t)];
+}
+
+inline float tubeBandPeak(int t) {
+  return tubePeak[clampTubeIndex(t)];
+}
+
+inline float tubeBandNeighborhood(int t) {
+  int i = clampTubeIndex(t);
+  float sum = tubeBand(i);
+  int count = 1;
+  if (i > 0) {
+    sum += tubeBand(i - 1);
+    count++;
+  }
+  if (i + 1 < TUBES) {
+    sum += tubeBand(i + 1);
+    count++;
+  }
+  return sum / (float)count;
+}
 
 inline int idx(int t, int y) {
   if (!SERPENTINE) return t * H + y;

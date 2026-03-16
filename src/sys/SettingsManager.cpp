@@ -11,11 +11,15 @@ namespace SettingsManager {
         // Load variables with default fallbacks. 
         // ACTIVE_MODE_INT is now handled as a full integer.
         ACTIVE_MODE_INT    = prefs.getInt("mode", 1);
-        // Clamp to valid mode range (0-9)
-        if (ACTIVE_MODE_INT < 0 || ACTIVE_MODE_INT > 9) ACTIVE_MODE_INT = 0;
-        USER_BRIGHTNESS    = prefs.getUChar("bri", 90);
-        MASTER_SENSITIVITY = prefs.getFloat("sens", 1.0f);
+        // Clamp to valid mode range (0-10)
+        if (ACTIVE_MODE_INT < 0 || ACTIVE_MODE_INT > 10) ACTIVE_MODE_INT = 0;
+        USER_BRIGHTNESS    = constrain((int)prefs.getUChar("bri", 90), 5, 255);
+        MASTER_SENSITIVITY = constrain(prefs.getFloat("sens", 1.0f), 0.05f, 3.0f);
+        globalBrightness   = USER_BRIGHTNESS;
         SOLID_STYLE        = prefs.getUChar("style", 0);
+        PSILO_WANDER       = constrain((int)prefs.getUChar("psiWand", 72), 0, 100);
+        PSILO_BLOOM        = constrain((int)prefs.getUChar("psiBloom", 64), 0, 100);
+        PSILO_LUCIDITY     = constrain((int)prefs.getUChar("psiLucid", 58), 0, 100);
         
         uint32_t savedColor = prefs.getUInt("color", 0x00FFCC); 
         SOLID_COLOR_VAL = CRGB((savedColor >> 16) & 0xFF, (savedColor >> 8) & 0xFF, savedColor & 0xFF);
@@ -29,6 +33,9 @@ namespace SettingsManager {
         prefs.putUChar("bri", USER_BRIGHTNESS);
         prefs.putFloat("sens", MASTER_SENSITIVITY);
         prefs.putUChar("style", SOLID_STYLE);
+        prefs.putUChar("psiWand", PSILO_WANDER);
+        prefs.putUChar("psiBloom", PSILO_BLOOM);
+        prefs.putUChar("psiLucid", PSILO_LUCIDITY);
         
         uint32_t c = (SOLID_COLOR_VAL.r << 16) | (SOLID_COLOR_VAL.g << 8) | SOLID_COLOR_VAL.b;
         prefs.putUInt("color", c);

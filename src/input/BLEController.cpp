@@ -25,8 +25,8 @@ namespace BLEController {
             // 1. Mode Change
             if (uuid == "beb5483e-36e1-4688-b7f5-ea07361b26a8") {
                 int newMode = val.toInt();
-                // Validate against available modes (0-9)
-                if (newMode >= 0 && newMode <= 9) {
+                // Validate against available modes (0-10)
+                if (newMode >= 0 && newMode <= 10) {
                     if (newMode != ACTIVE_MODE_INT) {
                         Transition::trigger(); 
                         ACTIVE_MODE_INT = newMode;
@@ -74,7 +74,18 @@ namespace BLEController {
                 }
             }
 
-            // 5. Commands (Power, Source, and Sleep Support)
+            // 5. Psilocybin Wander Controls
+            else if (uuid == "6a7b8c90-5555-4444-8888-112233445566") {
+                int firstComma = val.indexOf(',');
+                int secondComma = val.indexOf(',', firstComma + 1);
+                if (firstComma > 0 && secondComma > firstComma) {
+                    PSILO_WANDER = (uint8_t)constrain(val.substring(0, firstComma).toInt(), 0, 100);
+                    PSILO_BLOOM = (uint8_t)constrain(val.substring(firstComma + 1, secondComma).toInt(), 0, 100);
+                    PSILO_LUCIDITY = (uint8_t)constrain(val.substring(secondComma + 1).toInt(), 0, 100);
+                }
+            }
+
+            // 6. Commands (Power, Source, and Sleep Support)
             else if (uuid == "a7913500-1111-4444-8888-999999999999") {
                 if (val == "PWR:AWAKE")        currentPower = PowerState::AWAKE;
                 else if (val == "PWR:STANDBY")  currentPower = PowerState::STANDBY;
@@ -131,6 +142,9 @@ namespace BLEController {
                 // Color as hex string
                 snprintf(buf, sizeof(buf), "#%02X%02X%02X,%d", SOLID_COLOR_VAL.r, SOLID_COLOR_VAL.g, SOLID_COLOR_VAL.b, SOLID_STYLE);
                 p->setValue(buf);
+            } else if (strcmp(u, "6a7b8c90-5555-4444-8888-112233445566") == 0) {
+                snprintf(buf, sizeof(buf), "%d,%d,%d", PSILO_WANDER, PSILO_BLOOM, PSILO_LUCIDITY);
+                p->setValue(buf);
             } else {
                 p->setValue("");
             }
@@ -140,6 +154,7 @@ namespace BLEController {
         addC("8ec5b223-231d-4467-b50a-ee23e61827b9"); // Brightness
         addC("92e42d8c-792f-4122-861f-1335b7193230"); // Sensitivity
         addC("0f60c1a0-3333-4444-8888-abcdefabcdef"); // Color
+        addC("6a7b8c90-5555-4444-8888-112233445566"); // Psilocybin Wander
         addC("a7913500-1111-4444-8888-999999999999"); // Commands
 
         pServ->start();

@@ -6,9 +6,11 @@ namespace Mode_AuroraV2 {
         static float skyPos = 0;
         skyPos += 0.8f + (bandBassS * 2.0f);
 
-        float sparkleDensity = clamp01(bandHighS * 2.2f);
-
         for (int t = 0; t < TUBES; t++) {
+            float localBand = tubeBand(t);
+            float localBlend = tubeBandNeighborhood(t);
+            float sparkleDensity = clamp01((tubeBandFast(t) * 1.7f) + (bandHighS * 0.8f));
+
             for (int y = 0; y < H; y++) {
                 uint8_t baseNoise = inoise8(t * 40, y * 20, (int)skyPos);
 
@@ -20,7 +22,7 @@ namespace Mode_AuroraV2 {
                 // Borealis Curtain
                 uint8_t curtain = inoise8(t * 55, (y * 18) - (int)(skyPos * 0.6f), millis() / 6);
                 CRGB aur = ColorFromPalette(palBorealis, curtain, 180, LINEARBLEND);
-                nblend(bg, aur, (uint8_t)(90 + bandMidS * 80));
+                nblend(bg, aur, (uint8_t)(70 + (localBlend * 120.0f)));
 
                 // High-freq Sparkles
                 uint8_t sparkleNoise = inoise8(t * 90, y * 90, millis());
@@ -31,8 +33,8 @@ namespace Mode_AuroraV2 {
                     nblend(bg, highlight, intensity);
                 }
 
-                // Global Breath
-                float alive = lerpf(0.22f, 0.55f, volSmooth);
+                // Local life per tube, with some global ambience under it
+                float alive = clamp01(0.18f + (localBand * 0.45f) + (volSmooth * 0.12f));
                 bg.nscale8((uint8_t)(255.0f * alive));
                 leds[idx(t, y)] = bg;
             }

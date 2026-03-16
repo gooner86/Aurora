@@ -5,11 +5,11 @@
 #include "../modes/ModeRegistry.h"
 
 namespace ModeManager {
+    static bool frameHistoryValid = false;
 
     // Updated to use 'int' to match State.h
     bool isAuroraFamily(int mode) {
-        // Cases 0, 3, and 6 are Aurora V1, V2, and V3
-        return (mode == 0 || mode == 3 || mode == 6);
+        return (mode == 0 || mode == 2 || mode == 3 || mode == 5 || mode == 6 || mode == 7 || mode == 8 || mode == 9 || mode == 10);
     }
 
     void init() {
@@ -20,35 +20,50 @@ namespace ModeManager {
 
     void render() {
         // Ensure mode is valid to avoid out-of-range lookups
-        if (ACTIVE_MODE_INT < 0 || ACTIVE_MODE_INT > 9) {
+        if (ACTIVE_MODE_INT < 0 || ACTIVE_MODE_INT > 10) {
             ACTIVE_MODE_INT = 0;
         }
-        // 1. Snapshot the current frame for the Transition engine 
-        if (Transition::isTransitioning()) {
-            for (int i = 0; i < NUM_LEDS; i++) {
-                lastFrame[i] = leds[i];
-            }
-        }
-
-        // 2. Run the actual Render logic for the selected mode
+        // 1. Run the actual Render logic for the selected mode
         switch (ACTIVE_MODE_INT) {
             case 0: Mode_AuroraV1::render();    break;
             case 1: Mode_EQSpectrum::render();  break; 
             case 2: Mode_VacuumTube::render();  break;
             case 3: Mode_AuroraV2::render();    break;
-            case 4: Mode_RainbowFlow::render(); break;
-            case 5: Mode_SolidColor::render();  break;
+            case 4: Mode_RainbowFlow::render(); break; // Party / showcase mode
+            case 5: Mode_SolidColor::render();  break; // Color Veil
             case 6: Mode_AuroraV3::render();    break;
             case 7: Mode_NightRain::render();   break;
             case 8: Mode_DeepOcean::render();   break;
             case 9: Mode_IbizaSunset::render(); break;
+            case 10: Mode_PsilocybinWander::render(); break;
             default: Mode_AuroraV1::render();   break;
         }
 
-        // 3. Handle Crossfades (blends lastFrame into leds)
+        // 2. Handle mode-change crossfades
         Transition::applyCrossfade();
 
-        // 4. Push to the hardware
-        // Hardware push is handled centrally in main.loop()
+        // 3. Signature ambient modes keep a gentle frame memory.
+        if (isAuroraFamily(ACTIVE_MODE_INT)) {
+            if (!frameHistoryValid) {
+                for (int i = 0; i < NUM_LEDS; i++) {
+                    lastFrame[i] = leds[i];
+                }
+                frameHistoryValid = true;
+                return;
+            }
+
+            const float blendK = 0.38f;
+            for (int i = 0; i < NUM_LEDS; i++) {
+                leds[i].r = (uint8_t)(lastFrame[i].r + (leds[i].r - lastFrame[i].r) * blendK);
+                leds[i].g = (uint8_t)(lastFrame[i].g + (leds[i].g - lastFrame[i].g) * blendK);
+                leds[i].b = (uint8_t)(lastFrame[i].b + (leds[i].b - lastFrame[i].b) * blendK);
+                lastFrame[i] = leds[i];
+            }
+        } else {
+            for (int i = 0; i < NUM_LEDS; i++) {
+                lastFrame[i] = leds[i];
+            }
+            frameHistoryValid = true;
+        }
     }
 }

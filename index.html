@@ -127,11 +127,12 @@
         <option value="2">VACUUM TUBE</option>
         <option value="3">AURORA V2</option>
         <option value="4">RAINBOW FLOW</option>
-        <option value="5">SOLID COLOR</option>
+        <option value="5">COLOR VEIL</option>
         <option value="6">AURORA V3</option>
         <option value="7">NIGHT RAIN</option>
         <option value="8">DEEP OCEAN</option>
         <option value="9">IBIZA SUNSET</option>
+        <option value="10">PSILOCYBIN WANDER</option>
         </select>
       </div>
       <div class="viz-preview mode-raw" id="vizPreview" aria-label="Mode colour preview">
@@ -146,18 +147,26 @@
     </div>
     <div class="glass-card" id="contextPanel">
       <label>Audio Sensitivity <span id="valSens" class="val-readout">1.0</span></label>
-      <input type="range" id="sensSlider" min="0.1" max="3.0" step="0.1" value="1.0" oninput="updateVal('valSens', this.value); updateSensitivity()" onchange="updateSensitivity()">
+      <input type="range" id="sensSlider" min="0.05" max="3.0" step="0.05" value="1.0" oninput="updateVal('valSens', this.value); updateSensitivity()" onchange="updateSensitivity()">
     </div>
     <div class="glass-card hidden" id="colorPanel">
-      <label>Solid Color</label>
+      <label>Veil Tint</label>
       <input type="color" id="solidColor" value="#00ffcc" onchange="sendSolidColor()">
       <label style="margin-top:15px;">Animation Style</label>
       <div class="select-wrapper">
         <select id="solidStyle" onchange="sendSolidColor()">
-          <option value="0" selected>Pulse (Breathing)</option>
-          <option value="1">Bars (Sound Reactive)</option>
+          <option value="0" selected>Curtain Drift</option>
+          <option value="1">Column Bloom</option>
         </select>
       </div>
+    </div>
+    <div class="glass-card hidden" id="voyagePanel">
+      <label>Wander <span id="valVoyageDepth" class="val-readout">72</span></label>
+      <input type="range" id="voyageDepth" min="0" max="100" value="72" oninput="updateVal('valVoyageDepth', this.value); sendVoyageSettings()" onchange="sendVoyageSettings()">
+      <label style="margin-top:15px;">Bloom <span id="valVoyageBloom" class="val-readout">64</span></label>
+      <input type="range" id="voyageBloom" min="0" max="100" value="64" oninput="updateVal('valVoyageBloom', this.value); sendVoyageSettings()" onchange="sendVoyageSettings()">
+      <label style="margin-top:15px;">Lucidity <span id="valVoyageLucidity" class="val-readout">58</span></label>
+      <input type="range" id="voyagePalette" min="0" max="100" value="58" oninput="updateVal('valVoyageLucidity', this.value); sendVoyageSettings()" onchange="sendVoyageSettings()">
     </div>
     <button class="btn-disconnect" onclick="disconnectBLE()">Disconnect Device</button>
   </div>
@@ -168,6 +177,7 @@
     bright: "8ec5b223-231d-4467-b50a-ee23e61827b9",
     sens: "92e42d8c-792f-4122-861f-1335b7193230",
     color: "0f60c1a0-3333-4444-8888-abcdefabcdef",
+    voyage: "6a7b8c90-5555-4444-8888-112233445566",
     sleep: "a7913500-1111-4444-8888-999999999999"
   };
   const MODES = {
@@ -176,11 +186,12 @@
     2: { family:"aurora" }, // Tube
     3: { family:"aurora" }, // V2
     4: { family:"raw" },    // Rainbow
-    5: { family:"raw" },    // Solid
+      5: { family:"aurora" }, // Color Veil
     6: { family:"aurora" }, // V3
     7: { family:"aurora" }, // Rain
     8: { family:"aurora" }, // Ocean
-    9: { family:"aurora" }  // Ibiza
+    9: { family:"aurora" }, // Ibiza
+    10: { family:"aurora" } // Psilocybin Wander
   };
   let device, server, service, charMap = {};
   let currentMode = 1;
@@ -243,11 +254,12 @@
       2: [62,62,62,62,62,62,62,62,62,62,62], // Tube
       3: [55,72,60,78,52,76,58,74,50,70,54], // V2
       4: [30,40,52,64,76,64,52,40,30,22,18], // Rainbow
-      5: [52,52,52,52,52,52,52,52,52,52,52], // Solid
+      5: [28,34,42,56,68,76,68,56,42,34,28], // Color Veil
       6: [30,44,58,70,78,72,60,48,36,28,22], // V3
       7: [18,22,26,20,30,24,28,22,26,20,18], // Rain
       8: [26,34,42,50,62,68,60,48,40,32,26], // Ocean
-      9: [22,28,36,48,62,74,62,48,36,28,22]  // Ibiza
+      9: [22,28,36,48,62,74,62,48,36,28,22], // Ibiza
+      10: [16,26,40,58,76,84,72,56,38,24,14] // Psilocybin Wander
     };
     const gradients = {
       0: ["#050014","#003314","#00ff7a","#8a2be2","#ffd0ff"], // V1
@@ -255,11 +267,12 @@
       2: ["#120000","#ff3d00","#ff8a00","#ffd0a6","#ffffff"], // Tube
       3: ["#020018","#3b0070","#00ffd5","#ff146e","#ffffff"], // V2
       4: ["#ff0066","#ffcc00","#00ffcc","#0066ff","#bd00ff"], // Rainbow
-      5: ["var(--primary)","var(--primary)","var(--primary)","var(--primary)","var(--primary)"], // Solid
+      5: ["#050812","#08223a","#0da89a","#b6f6f0","#fff6df"], // Color Veil
       6: ["#030018","#1b00ff","#00ff8c","#b000ff","#ffe0ff"], // V3
       7: ["#000015","#002040","#6aa0ff","#b8d5ff","#ffffff"], // Rain
       8: ["#00000a","#00112a","#003a55","#00b9a7","#b3f0ff"], // Ocean
-      9: ["#000514","#3a0020","#ff4d00","#ffb000","#3a0058"]  // Ibiza
+      9: ["#000514","#3a0020","#ff4d00","#ffb000","#3a0058"], // Ibiza
+      10: ["#06000f","#22122d","#34be80","#f08a2e","#defff6"]  // Psilocybin Wander
     };
     const stops = gradients[mode] || gradients[1];
     const hs = heights[mode] || heights[1];
@@ -276,11 +289,25 @@
         tube.style.background = `linear-gradient(to top, rgba(0,0,0,0.25), ${hex})`;
       });
     }
+    if (mode === 10) {
+      const lucidity = parseInt(document.getElementById('voyagePalette').value, 10) || 0;
+      const mist = `rgba(52,190,128,${0.30 + (lucidity / 100) * 0.20})`;
+      const ember = `rgba(240,138,46,${0.38 + (lucidity / 100) * 0.24})`;
+      const ghost = `rgba(222,255,246,${0.45 + (lucidity / 100) * 0.30})`;
+      const stops2 = ["#06000f", "#22122d", mist, ember, ghost];
+      tubes.forEach((tube, i) => {
+        const a = stops2[i % stops2.length];
+        const b = stops2[(i + 1) % stops2.length];
+        const c = stops2[(i + 2) % stops2.length];
+        tube.style.background = `linear-gradient(to top, ${a}, ${b}, ${c})`;
+      });
+    }
   }
   async function changeMode(){
     const m = parseInt(document.getElementById('modeSelect').value);
     currentMode = m;
     document.getElementById('colorPanel').classList.toggle('hidden', m !== 5);
+    document.getElementById('voyagePanel').classList.toggle('hidden', m !== 10);
     setPreview(m);
     await writeChar('mode', m);
   }
@@ -296,6 +323,13 @@
     const style = document.getElementById('solidStyle').value;
     await writeChar('color', `${hex},${style}`);
     if (currentMode === 5) setPreview(5);
+  }
+  async function sendVoyageSettings(){
+    const depth = document.getElementById('voyageDepth').value;
+    const bloom = document.getElementById('voyageBloom').value;
+    const lucidity = document.getElementById('voyagePalette').value;
+    await writeChar('voyage', `${depth},${bloom},${lucidity}`);
+    if (currentMode === 10) setPreview(10);
   }
   window.addEventListener('DOMContentLoaded', () => {
     setPreview(parseInt(document.getElementById('modeSelect').value));

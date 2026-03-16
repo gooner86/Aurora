@@ -39,6 +39,7 @@ CRGB leds[NUM_LEDS];
 CRGB lastFrame[NUM_LEDS];
 
 uint8_t bandBass8           = 0;
+float tubeBandsInstant[TUBES] = {0};
 float tubeLevel[TUBES]       = {0};
 float tubePeak[TUBES]        = {0};
 float tubeBandsSmooth[TUBES] = {0};
@@ -61,6 +62,9 @@ bool settingsDirty = false;
 // ==========================================
 CRGB SOLID_COLOR_VAL = CRGB(0, 255, 204);
 uint8_t SOLID_STYLE = 0;
+uint8_t PSILO_WANDER = 72;
+uint8_t PSILO_BLOOM = 64;
+uint8_t PSILO_LUCIDITY = 58;
 
 DEFINE_GRADIENT_PALETTE( aurora_gp ) { 0,0,0,0, 40,0,50,20, 100,0,255,50, 160,0,200,200, 210,100,0,220, 255,220,220,255 };
 DEFINE_GRADIENT_PALETTE( borealis_gp ) { 0,15,0,30, 70,60,0,120, 140,0,90,255, 200,0,255,140, 255,255,80,190 };
@@ -93,6 +97,7 @@ void setup() {
 
     // 2. SUBSYSTEMS
     SettingsManager::init();
+    FastLED.setBrightness(globalBrightness);
     // Respect loaded settings instead of forcing a mode here
 
     DisplayController::init(); 
@@ -136,9 +141,7 @@ void loop() {
     VisualPhysics::update();  // Safe to use now because we fixed the math crash earlier!
     ModeManager::render();    
     
-    // Override pot if it's turned all the way down during testing
-    uint8_t outputBri = (globalBrightness < 10) ? 100 : globalBrightness;
-    FastLED.setBrightness(outputBri);
+    FastLED.setBrightness(globalBrightness);
     
     FastLED.show();
     yield(); // Vital for ESP32 background tasks

@@ -11,4 +11,4 @@
 #include "Mode_EQSpectrum.h"
 #include "Mode_RainbowFlow.h"
 #include "Mode_SolidColor.h"
-
+#include "Mode_PsilocybinWander.h"
