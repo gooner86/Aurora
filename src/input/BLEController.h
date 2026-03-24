@@ -3,4 +3,5 @@
 
 namespace BLEController {
     void init();
+    void tick();
 }

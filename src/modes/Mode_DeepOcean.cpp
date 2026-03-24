@@ -35,9 +35,9 @@ namespace Mode_DeepOcean {
         OceanTheme theme = getTheme();
         uint32_t now = millis();
 
-        tidePhase += 0.08f + (bandBassS * 0.55f) + (volSmooth * 0.06f);
-        currentPhase += 0.10f + (bandMidS * 0.72f) + (volSmooth * 0.04f);
-        shimmerPhase += 0.16f + (bandHighS * 1.18f) + (volBeat * 0.18f);
+        tidePhase += tempoRate(0.04f, 0.18f) + (bandBassS * 0.16f) + (volSmooth * 0.03f);
+        currentPhase += tempoRate(0.05f, 0.22f) + (bandMidS * 0.22f) + (volSmooth * 0.03f);
+        shimmerPhase += tempoRate(0.06f, 0.28f) + (bandHighS * 0.32f) + (volBeat * 0.08f);
 
         if (beatDetected) {
             foamPulse = 1.0f;
@@ -53,14 +53,29 @@ namespace Mode_DeepOcean {
             float localField = tubeBandNeighborhood(t);
             float lateral = (TUBES > 1) ? ((float)t / (float)(TUBES - 1)) : 0.0f;
 
-            float tide = sinf((t * 0.42f) + (tidePhase * 0.74f));
-            float crossSwell = sinf((t * 0.18f) - (currentPhase * 0.34f));
-            float undertow = cosf((t * 0.33f) + (currentPhase * 0.58f));
+            uint8_t surfaceNoise = inoise8(
+                t * 40 + (int)(tidePhase * 22.0f),
+                320 + (int)(currentPhase * 12.0f),
+                now / 15
+            );
+            uint8_t crossNoise = inoise8(
+                t * 24 + 900,
+                1180 + (int)(currentPhase * 16.0f),
+                now / 18
+            );
+            uint8_t undertowNoise = inoise8(
+                t * 36 + 1500,
+                260 + (int)(currentPhase * 18.0f),
+                now / 11
+            );
+            float surfaceDrift = ((float)surfaceNoise - 128.0f) / 128.0f;
+            float crossDrift = ((float)crossNoise - 128.0f) / 128.0f;
+            float undertowDrift = ((float)undertowNoise - 128.0f) / 128.0f;
 
             float surfaceNorm = clamp01(
-                0.50f
-                + (tide * 0.12f)
-                + (crossSwell * 0.06f)
+                0.46f
+                + (surfaceDrift * 0.14f)
+                + (crossDrift * 0.07f)
                 + (localField * 0.22f)
                 + (bandBassS * 0.08f)
             );
@@ -70,7 +85,7 @@ namespace Mode_DeepOcean {
             float undertowNorm = clamp01(
                 0.22f
                 + (lateral * 0.18f)
-                + ((undertow + 1.0f) * 0.16f)
+                + ((undertowDrift + 1.0f) * 0.16f)
                 + (localLevel * 0.10f)
             );
             float undertowY = lerpf(0.4f, H - 3.2f, undertowNorm);
@@ -140,17 +155,13 @@ namespace Mode_DeepOcean {
                 }
 
                 float alive = clamp01(
-                    0.18f
-                    + (topBias * 0.12f)
-                    + (localField * 0.16f)
-                    + (caustic * 0.14f)
+                    0.26f
+                    + (topBias * 0.14f)
+                    + (caustic * 0.12f)
                     + (undertowGlow * 0.10f)
-                    + (swellGlow * 0.30f)
-                    + (localLevel * 0.10f)
-                    + (localPeak * 0.06f)
-                    + (volSmooth * 0.06f)
+                    + (swellGlow * 0.10f)
                 );
-                color.nscale8((uint8_t)(alive * 255.0f));
+                color.nscale8_video((uint8_t)(alive * 255.0f));
                 leds[idx(t, y)] = color;
             }
         }

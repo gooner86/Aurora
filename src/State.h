@@ -39,9 +39,11 @@ extern CRGB lastFrame[NUM_LEDS];
 // Audio & Physics State
 extern uint8_t bandBass8;
 extern float tubeBandsInstant[TUBES];
+extern float tubeBandsSplitInstant[TUBES];
 extern float tubeLevel[TUBES];
 extern float tubePeak[TUBES];
 extern float tubeBandsSmooth[TUBES];
+extern float tubeBandsSplitSmooth[TUBES];
 extern float tubeMax[TUBES];
 
 extern float bandBassS;
@@ -57,6 +59,11 @@ extern float highEnergy;
 extern float beatThreshold;
 extern bool beatDetected;
 extern uint32_t lastBeatTime;
+extern float beatPulse;
+extern float tempoBPM;
+extern float tempoConfidence;
+extern float tempoNormalized;
+extern uint32_t beatIntervalMs;
 
 // Settings dirty flag for debounced NVS writes
 extern bool settingsDirty;
@@ -74,6 +81,19 @@ extern CRGBPalette16 palIbiza;
 // =====================
 inline float lerpf(float a, float b, float t) { return a + (b - a) * t; }
 inline float clamp01(float x) { return (x < 0) ? 0 : (x > 1 ? 1 : x); }
+inline int uiPercent(float value, float minValue, float maxValue) {
+  if (maxValue <= minValue) return 0;
+  float normalized = clamp01((value - minValue) / (maxValue - minValue));
+  return (int)lroundf(normalized * 100.0f);
+}
+inline int brightnessPercent(uint8_t value) {
+  return uiPercent((float)constrain((int)value, 5, 255), 5.0f, 255.0f);
+}
+inline int sensitivityPercent(float value) {
+  return uiPercent(constrain(value, 0.05f, 3.0f), 0.05f, 3.0f);
+}
+inline bool tempoReady() { return tempoConfidence > 0.18f && beatIntervalMs >= 240 && beatIntervalMs <= 1500; }
+inline float tempoRate(float slow, float fast) { return lerpf(slow, fast, tempoReady() ? clamp01(tempoNormalized) : 0.0f); }
 
 inline int clampTubeIndex(int t) {
   if (t < 0) return 0;
@@ -87,6 +107,14 @@ inline float tubeBand(int t) {
 
 inline float tubeBandFast(int t) {
   return tubeBandsInstant[clampTubeIndex(t)];
+}
+
+inline float tubeBandSplit(int t) {
+  return tubeBandsSplitSmooth[clampTubeIndex(t)];
+}
+
+inline float tubeBandSplitFast(int t) {
+  return tubeBandsSplitInstant[clampTubeIndex(t)];
 }
 
 inline float tubeBandLevel(int t) {

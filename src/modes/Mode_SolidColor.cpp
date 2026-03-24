@@ -6,8 +6,10 @@ void Mode_SolidColor::render() {
     static float driftA = 0.0f;
     static float driftB = 0.0f;
     bool curtainStyle = (SOLID_STYLE == 0);
-    driftA += (curtainStyle ? 0.24f : 0.18f) + (bandBassS * (curtainStyle ? 0.80f : 0.58f));
-    driftB += (curtainStyle ? 0.14f : 0.09f) + (bandMidS * (curtainStyle ? 0.55f : 0.38f));
+    driftA += tempoRate(curtainStyle ? 0.10f : 0.08f, curtainStyle ? 0.34f : 0.24f)
+        + (bandBassS * (curtainStyle ? 0.28f : 0.20f));
+    driftB += tempoRate(curtainStyle ? 0.06f : 0.04f, curtainStyle ? 0.18f : 0.12f)
+        + (bandMidS * (curtainStyle ? 0.18f : 0.12f));
 
     CRGB tint = SOLID_COLOR_VAL;
     if ((uint16_t)tint.r + (uint16_t)tint.g + (uint16_t)tint.b < 16) {

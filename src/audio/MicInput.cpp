@@ -1,10 +1,12 @@
 #include "MicInput.h"
 #include "../Hardware.h"
 #include "driver/i2s.h"
+#include <esp_log.h>
 
 namespace MicInput {
     bool micOk = false;
     static i2s_port_t activePort = I2S_NUM_1;
+    static const char* I2S_TAG = "I2S";
 
     enum class DecodeMode : uint8_t {
         Shift14,
@@ -70,6 +72,13 @@ namespace MicInput {
             default:
                 return "shift14";
         }
+    }
+
+    static void quietDriverUninstall(i2s_port_t port) {
+        esp_log_level_t previousLevel = esp_log_level_get(I2S_TAG);
+        esp_log_level_set(I2S_TAG, ESP_LOG_NONE);
+        i2s_driver_uninstall(port);
+        esp_log_level_set(I2S_TAG, previousLevel);
     }
 
     static void sd_line_monitor(int gpioNum, int durationMs = 2000) {
@@ -177,12 +186,12 @@ namespace MicInput {
             .use_apll = false
         };
 
-        i2s_driver_uninstall(port);
+        quietDriverUninstall(port);
         if (i2s_driver_install(port, &cfg, 0, NULL) != ESP_OK) {
             return false;
         }
         if (i2s_set_pin(port, &pinConfig) != ESP_OK) {
-            i2s_driver_uninstall(port);
+            quietDriverUninstall(port);
             return false;
         }
 
@@ -192,7 +201,7 @@ namespace MicInput {
         int32_t probeBuffer[probeSamples];
         size_t bytesRead = 0;
         if (i2s_read(port, probeBuffer, sizeof(probeBuffer), &bytesRead, 60) != ESP_OK || bytesRead < sizeof(int32_t) * 16) {
-            i2s_driver_uninstall(port);
+            quietDriverUninstall(port);
             return false;
         }
 
@@ -233,7 +242,7 @@ namespace MicInput {
             best->valid = true;
         }
 
-        i2s_driver_uninstall(port);
+        quietDriverUninstall(port);
         return localBest.valid;
     }
 
@@ -243,8 +252,8 @@ namespace MicInput {
         activePort = I2S_NUM_1;
         activeDecode = DecodeMode::Shift14;
 
-        i2s_driver_uninstall(I2S_NUM_1);
-        i2s_driver_uninstall(I2S_NUM_0);
+        quietDriverUninstall(I2S_NUM_1);
+        quietDriverUninstall(I2S_NUM_0);
 
         pinMode(MIC_BCLK, INPUT);
         pinMode(MIC_WS, INPUT);
@@ -315,7 +324,7 @@ namespace MicInput {
                 );
                 return;
             }
-            i2s_driver_uninstall(activePort);
+            quietDriverUninstall(activePort);
         }
 
         sd_line_monitor(pin_config.data_in_num, 2000);

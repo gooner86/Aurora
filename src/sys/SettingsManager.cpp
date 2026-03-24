@@ -11,8 +11,8 @@ namespace SettingsManager {
         // Load variables with default fallbacks. 
         // ACTIVE_MODE_INT is now handled as a full integer.
         ACTIVE_MODE_INT    = prefs.getInt("mode", 1);
-        // Clamp to valid mode range (0-10)
-        if (ACTIVE_MODE_INT < 0 || ACTIVE_MODE_INT > 10) ACTIVE_MODE_INT = 0;
+        // Clamp to valid mode range (0-11)
+        if (ACTIVE_MODE_INT < 0 || ACTIVE_MODE_INT > 11) ACTIVE_MODE_INT = 0;
         USER_BRIGHTNESS    = constrain((int)prefs.getUChar("bri", 90), 5, 255);
         MASTER_SENSITIVITY = constrain(prefs.getFloat("sens", 1.0f), 0.05f, 3.0f);
         globalBrightness   = USER_BRIGHTNESS;

@@ -4,29 +4,30 @@
 namespace Mode_AuroraV1 {
     void render() {
         static float yDrift = 0;
-        yDrift += 0.04f + (bandBassS * 0.10f);
+        yDrift += tempoRate(0.018f, 0.072f) + (bandBassS * 0.04f) + (beatPulse * 0.01f);
 
         for (int t = 0; t < TUBES; t++) {
             float localBand = tubeBand(t);
             float localWave = tubeBandNeighborhood(t);
             float localLift = tubeBandLevel(t);
+            float warp = 6.0f + (localWave * 10.0f) + (localLift * 6.0f);
 
             for (int y = 0; y < H; y++) {
-                // Generate plasma noise
                 uint8_t noise = inoise8(
-                    t * 45 + (int)(localBand * 80.0f),
-                    (y * 15) - (int)(yDrift * (8.0f + localWave * 8.0f)),
-                    millis() / 3
+                    t * 45 + (int)(localBand * 110.0f),
+                    (y * 16) - (int)(yDrift * warp),
+                    (millis() / 4) + (int)(localLift * 240.0f)
                 );
-                
-                // Map noise and per-tube energy to the palette
-                uint8_t idxP = qadd8(qsub8(noise, 40), (uint8_t)((localWave * 70.0f) + (bandBassS * 25.0f)));
+
+                uint8_t idxP = qadd8(
+                    noise,
+                    (uint8_t)((localWave * 80.0f) + (localBand * 36.0f) + (beatPulse * 18.0f) + (y * 6))
+                );
                 CRGB color = ColorFromPalette(palAuroraReal, idxP, 255, LINEARBLEND);
 
-                // Give each tube its own glow amount instead of one shared bass pulse
                 uint8_t shaped = ease8InOutApprox(noise);
-                float glow = clamp01(0.20f + (localLift * 0.55f) + (localBand * 0.25f) + (bandBassS * 0.18f));
-                color.nscale8((uint8_t)(shaped * glow * 255));
+                uint8_t baseGlow = qadd8(58, scale8(shaped, 170));
+                color.nscale8_video(baseGlow);
 
                 leds[idx(t, y)] = color;
             }

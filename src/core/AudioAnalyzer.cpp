@@ -18,18 +18,74 @@ static int bandEdges[TUBES + 1];
 static bool bandEdgesReady = false;
 static float bandFloor[TUBES];
 static float bandCeiling[TUBES];
+static float splitReference[TUBES];
 static float bandWeight[TUBES];
+static uint16_t tempoHistory[6];
+static uint8_t tempoHistoryCount = 0;
+static uint8_t tempoHistoryIndex = 0;
 
 static inline float smoothAR(float cur, float target, float attack, float release) {
     float k = (target > cur) ? attack : release;
     return cur + (target - cur) * k;
 }
 
+static inline void trackNoiseWindow(
+    float sample,
+    float &floor,
+    float &ceiling,
+    float minSpan,
+    float floorRise,
+    float floorFall,
+    float ceilingAttack,
+    float ceilingRelease
+) {
+    if (floor <= 0.0f) {
+        floor = sample;
+    }
+    if (ceiling <= 0.0f) {
+        ceiling = floor + minSpan;
+    }
+
+    float floorBlend = (sample > floor) ? floorRise : floorFall;
+    floor = lerpf(floor, sample, floorBlend);
+
+    float ceilingTarget = max(sample, floor + minSpan);
+    float ceilingBlend = (ceilingTarget > ceiling) ? ceilingAttack : ceilingRelease;
+    ceiling = lerpf(ceiling, ceilingTarget, ceilingBlend);
+
+    if (ceiling < floor + minSpan) {
+        ceiling = floor + minSpan;
+    }
+}
+
+static inline void trackSplitReference(
+    float desired,
+    float baseline,
+    float &reference,
+    float riseBlend,
+    float fallBlend
+) {
+    float target = max(desired, baseline);
+    if (reference <= 0.0f) {
+        reference = target;
+        return;
+    }
+
+    float blend = (target > reference) ? riseBlend : fallBlend;
+    reference = lerpf(reference, target, blend);
+    if (reference < baseline) {
+        reference = baseline;
+    }
+}
+
 static inline int32_t decodeAudioSample(int32_t raw) {
     if (currentAudio == AudioSource::MIC_IN) {
         return MicInput::decodeSample(raw);
     }
-    return raw >> 8;
+    if (currentAudio == AudioSource::LINE_IN) {
+        return LineInput::decodeSample(raw);
+    }
+    return 0;
 }
 
 static bool readActiveSamples() {
@@ -73,10 +129,83 @@ static void initBandEdges() {
     bandEdgesReady = true;
 }
 
+static void clearTempoTracking() {
+    for (int i = 0; i < 6; ++i) {
+        tempoHistory[i] = 0;
+    }
+    tempoHistoryCount = 0;
+    tempoHistoryIndex = 0;
+    beatPulse = 0.0f;
+    tempoBPM = 0.0f;
+    tempoConfidence = 0.0f;
+    tempoNormalized = 0.0f;
+    beatIntervalMs = 0;
+}
+
+static float medianTempoInterval() {
+    if (tempoHistoryCount == 0) {
+        return 0.0f;
+    }
+
+    uint16_t sorted[6];
+    for (uint8_t i = 0; i < tempoHistoryCount; ++i) {
+        sorted[i] = tempoHistory[i];
+    }
+
+    for (uint8_t i = 1; i < tempoHistoryCount; ++i) {
+        uint16_t key = sorted[i];
+        int j = i - 1;
+        while (j >= 0 && sorted[j] > key) {
+            sorted[j + 1] = sorted[j];
+            --j;
+        }
+        sorted[j + 1] = key;
+    }
+
+    if ((tempoHistoryCount & 1U) == 1U) {
+        return (float)sorted[tempoHistoryCount / 2];
+    }
+
+    uint8_t hi = tempoHistoryCount / 2;
+    uint8_t lo = hi - 1;
+    return ((float)sorted[lo] + (float)sorted[hi]) * 0.5f;
+}
+
+static void pushTempoInterval(uint32_t intervalMs) {
+    if (intervalMs < 240 || intervalMs > 1500) {
+        return;
+    }
+
+    tempoHistory[tempoHistoryIndex] = (uint16_t)intervalMs;
+    tempoHistoryIndex = (uint8_t)((tempoHistoryIndex + 1) % 6);
+    if (tempoHistoryCount < 6) {
+        tempoHistoryCount++;
+    }
+
+    float medianInterval = medianTempoInterval();
+    if (medianInterval <= 0.0f) {
+        return;
+    }
+
+    beatIntervalMs = (uint32_t)lroundf(medianInterval);
+    float bpm = 60000.0f / medianInterval;
+    if (tempoBPM <= 0.0f) {
+        tempoBPM = bpm;
+    } else {
+        tempoBPM = lerpf(tempoBPM, bpm, 0.28f);
+    }
+
+    tempoNormalized = clamp01((tempoBPM - 70.0f) / 90.0f);
+    tempoConfidence = clamp01(tempoConfidence + 0.18f);
+}
+
 static void decayToSilence() {
     for (int t = 0; t < TUBES; ++t) {
         tubeBandsInstant[t] = 0.0f;
+        tubeBandsSplitInstant[t] = 0.0f;
         tubeBandsSmooth[t] = smoothAR(tubeBandsSmooth[t], 0.0f, 0.10f, 0.18f);
+        tubeBandsSplitSmooth[t] = smoothAR(tubeBandsSplitSmooth[t], 0.0f, 0.16f, 0.22f);
+        splitReference[t] = lerpf(splitReference[t], 0.0f, 0.03f);
     }
 
     bandBassS = smoothAR(bandBassS, 0.0f, 0.12f, 0.18f);
@@ -90,6 +219,11 @@ static void decayToSilence() {
     midEnergy = 0.0f;
     highEnergy = 0.0f;
     beatDetected = false;
+    beatPulse = lerpf(beatPulse, 0.0f, 0.18f);
+    tempoConfidence = lerpf(tempoConfidence, 0.0f, 0.05f);
+    if (tempoConfidence < 0.05f) {
+        clearTempoTracking();
+    }
 }
 
 namespace AudioAnalyzer {
@@ -98,9 +232,11 @@ namespace AudioAnalyzer {
             tubeMax[i] = 0.0f;
             bandFloor[i] = 0.0f;
             bandCeiling[i] = 0.0f;
+            splitReference[i] = 0.0f;
         }
         audioFloor = 20000.0f;
         audioCeiling = 180000.0f;
+        clearTempoTracking();
         initBandEdges();
     }
 
@@ -117,61 +253,35 @@ namespace AudioAnalyzer {
         }
 
         double sum = 0.0;
+        double rawAbsSum = 0.0;
         for (int i = 0; i < FFT_SAMPLES; ++i) {
-            sum += (double)decodeAudioSample(rawSamples[i]);
+            int32_t sample = decodeAudioSample(rawSamples[i]);
+            sum += (double)sample;
+            rawAbsSum += fabs((double)sample);
         }
         float mean = (float)(sum / FFT_SAMPLES);
 
-        double sumAbsDev = 0.0;
         for (int i = 0; i < FFT_SAMPLES; ++i) {
             float centered = (float)decodeAudioSample(rawSamples[i]) - mean;
             vReal[i] = (double)centered;
             vImag[i] = 0.0;
-            sumAbsDev += fabs(centered);
         }
 
-        float avgAbsDev = (float)(sumAbsDev / FFT_SAMPLES);
+        float avgAbs = (float)(rawAbsSum / FFT_SAMPLES);
 
         FFT.windowing(FFTWindow::Hamming, FFTDirection::Forward);
         FFT.compute(FFTDirection::Forward);
         FFT.complexToMagnitude();
         vReal[0] = 0.0;
         vReal[1] = 0.0;
-
-        if (avgAbsDev < audioFloor) {
-            audioFloor = lerpf(audioFloor, avgAbsDev, 0.12f);
-        } else {
-            audioFloor = lerpf(audioFloor, avgAbsDev, 0.0025f);
-        }
-
-        float desiredCeiling = max((avgAbsDev * 2.8f) + 2000.0f, (audioFloor * 2.6f) + 4000.0f);
-        if (desiredCeiling > audioCeiling) {
-            audioCeiling = lerpf(audioCeiling, desiredCeiling, 0.16f);
-        } else {
-            audioCeiling = lerpf(audioCeiling, desiredCeiling, 0.025f);
-        }
-
-        if (audioFloor < 2000.0f) {
-            audioFloor = 2000.0f;
-        }
-        if (audioCeiling < audioFloor * 2.4f) {
-            audioCeiling = audioFloor * 2.4f;
-        }
-
-        float gated = avgAbsDev - (audioFloor * 1.05f);
-        if (gated < 0.0f) {
-            gated = 0.0f;
-        }
-
-        float dynamicRange = audioCeiling - audioFloor;
-        if (dynamicRange < 8000.0f) {
-            dynamicRange = 8000.0f;
-        }
-
-        float normalized = clamp01((gated / dynamicRange) * MASTER_SENSITIVITY);
-        float inputLevel = powf(normalized, 0.60f);
-        float presenceGate = clamp01(0.04f + (inputLevel * 1.08f));
-
+        beatPulse = lerpf(beatPulse, 0.0f, 0.14f);
+        float sens = (MASTER_SENSITIVITY * MASTER_SENSITIVITY);
+        trackNoiseWindow(avgAbs, audioFloor, audioCeiling, 40000.0f, 0.010f, 0.0025f, 0.22f, 0.010f);
+        float audioExcursion = max(0.0f, avgAbs - (audioFloor + 3000.0f));
+        float audioRange = max(40000.0f, audioCeiling - audioFloor);
+        float inputLevel = clamp01((audioExcursion / (audioRange * 0.55f)) * sens);
+        float presenceGate = clamp01((audioExcursion / (audioRange * 0.70f)) * 1.35f);
+        presenceGate = powf(presenceGate, 1.35f);
         volSmooth = smoothAR(volSmooth, inputLevel, 0.18f, 0.06f);
         volBeat = smoothAR(volBeat, inputLevel, 0.45f, 0.12f);
 
@@ -189,49 +299,33 @@ namespace AudioAnalyzer {
                 bandSum += vReal[b];
             }
 
-            int bandBins = bandEdges[t + 1] - bandEdges[t];
-            if (bandBins < 1) {
-                bandBins = 1;
-            }
+            float bandPos = (TUBES > 1) ? ((float)t / (float)(TUBES - 1)) : 0.0f;
+            float lowBandBlend = clamp01(bandPos * 4.0f);
+            float rumbleBias = lerpf(1.75f, 1.0f, lowBandBlend);
+            float bandLevel = max((float)bandSum, 0.0f) * bandWeight[t];
+            float minBandSpan = lerpf(22000.0f, 9000.0f, bandPos);
 
-            float bandLevel = ((float)bandSum / (float)bandBins) * bandWeight[t];
-            if (bandLevel < 0.0f) {
-                bandLevel = 0.0f;
-            }
+            trackNoiseWindow(bandLevel, bandFloor[t], bandCeiling[t], minBandSpan, 0.012f, 0.004f, 0.24f, 0.012f);
+            float bandExcursion = max(0.0f, bandLevel - (bandFloor[t] + (minBandSpan * 0.08f * rumbleBias)));
+            float bandRange = max(minBandSpan, bandCeiling[t] - bandFloor[t]);
+            float splitBaseline = minBandSpan * lerpf(0.98f, 0.66f, bandPos);
+            float splitDesired = bandRange * lerpf(0.78f, 0.52f, bandPos);
+            float splitRise = lerpf(0.018f, 0.045f, bandPos);
+            float splitFall = lerpf(0.006f, 0.016f, bandPos);
+            trackSplitReference(splitDesired, splitBaseline, splitReference[t], splitRise, splitFall);
 
-            if (bandFloor[t] <= 0.0f && bandCeiling[t] <= 0.0f) {
-                bandFloor[t] = bandLevel;
-                bandCeiling[t] = max((bandLevel * 3.0f) + 120.0f, 320.0f);
-            }
+            float splitNormalized = clamp01((bandExcursion / (splitReference[t] * 0.60f)) * sens);
+            splitNormalized = powf(splitNormalized, lerpf(1.28f, 1.02f, clamp01(MASTER_SENSITIVITY / 3.0f)));
+            float lowBandGate = lerpf(clamp01(presenceGate * 1.35f), 1.0f, lowBandBlend);
+            splitNormalized *= lowBandGate;
+            float bandNormalized = splitNormalized * presenceGate;
+            bandNormalized = powf(bandNormalized, lerpf(1.45f, 1.10f, clamp01(MASTER_SENSITIVITY / 3.0f)));
 
-            if (bandLevel < bandFloor[t]) {
-                bandFloor[t] = lerpf(bandFloor[t], bandLevel, 0.12f);
-            } else {
-                bandFloor[t] = lerpf(bandFloor[t], bandLevel, 0.0020f);
-            }
-
-            float desiredBandCeiling = max((bandLevel * 2.6f) + 120.0f, (bandFloor[t] * 2.8f) + 160.0f);
-            if (desiredBandCeiling > bandCeiling[t]) {
-                bandCeiling[t] = lerpf(bandCeiling[t], desiredBandCeiling, 0.16f);
-            } else {
-                bandCeiling[t] = lerpf(bandCeiling[t], desiredBandCeiling, 0.03f);
-            }
-
-            float bandRange = bandCeiling[t] - bandFloor[t];
-            if (bandRange < 200.0f) {
-                bandRange = 200.0f;
-            }
-
-            float bandGated = bandLevel - (bandFloor[t] * 1.08f);
-            if (bandGated < 0.0f) {
-                bandGated = 0.0f;
-            }
-
-            float bandNormalized = clamp01((bandGated / bandRange) * MASTER_SENSITIVITY);
-            bandNormalized = powf(bandNormalized, 0.72f) * presenceGate;
-            tubeBandsInstant[t] = bandNormalized;
-            tubeBandsSmooth[t] = smoothAR(tubeBandsSmooth[t], bandNormalized, 0.35f, 0.12f);
             tubeMax[t] = bandCeiling[t];
+            tubeBandsSplitInstant[t] = splitNormalized;
+            tubeBandsInstant[t] = bandNormalized;
+            tubeBandsSplitSmooth[t] = smoothAR(tubeBandsSplitSmooth[t], splitNormalized, 0.56f, 0.24f);
+            tubeBandsSmooth[t] = smoothAR(tubeBandsSmooth[t], bandNormalized, 0.35f, 0.12f);
             totalEnergy += tubeBandsSmooth[t];
 
             if (t < (TUBES / 3)) {
@@ -259,28 +353,33 @@ namespace AudioAnalyzer {
         levelFast = levelFast * 0.7f + avgEnergy * 0.3f;
         levelSlow = levelSlow * 0.95f + avgEnergy * 0.05f;
 
-        if (levelFast > levelSlow * beatThreshold && (now - lastBeatTime) > 200) {
+        uint32_t sinceLastBeat = (lastBeatTime > 0) ? (now - lastBeatTime) : 1000;
+        if (levelFast > levelSlow * beatThreshold && sinceLastBeat > 200) {
             beatDetected = true;
+            beatPulse = 1.0f;
+            if (sinceLastBeat > 0) {
+                pushTempoInterval(sinceLastBeat);
+            }
             lastBeatTime = now;
         } else {
             beatDetected = false;
         }
 
-        static uint32_t lastD = 0;
-        if (millis() - lastD > 300) {
-            Serial.printf(
-                "MIC CHECK | Decoded: %ld | dev: %.2f | floor: %.2f | ceil: %.2f | vol: %.4f | gate: %.3f | b/m/h: %.3f %.3f %.3f\n",
-                (long)decodeAudioSample(rawSamples[0]),
-                avgAbsDev,
-                audioFloor,
-                audioCeiling,
-                volSmooth,
-                presenceGate,
-                bandBassS,
-                bandMidS,
-                bandHighS
-            );
-            lastD = millis();
+        if (tempoConfidence > 0.0f) {
+            float decay = 0.0035f;
+            if (!tempoReady()) {
+                decay = 0.012f;
+            }
+            if (beatIntervalMs > 0 && lastBeatTime > 0 && (now - lastBeatTime) > (beatIntervalMs * 4U)) {
+                decay = 0.045f;
+            }
+            tempoConfidence = lerpf(tempoConfidence, 0.0f, decay);
+            if (tempoConfidence < 0.06f) {
+                clearTempoTracking();
+            } else {
+                tempoNormalized = clamp01((tempoBPM - 70.0f) / 90.0f);
+            }
         }
+
     }
 }

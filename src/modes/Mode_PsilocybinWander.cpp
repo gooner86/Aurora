@@ -50,10 +50,10 @@ void Mode_PsilocybinWander::render() {
         : ((TUBES - 1) * 0.5f);
     focusTube = lerpf(focusTube, targetFocus, 0.06f + (wander * 0.16f));
 
-    driftPhase += 0.14f + (bandBassS * (0.44f + wander * 1.30f)) + (volSmooth * 0.10f);
-    branchPhase += 0.10f + (bandMidS * (0.34f + wander * 0.92f));
-    sporePhase += 0.12f + (bandHighS * (0.48f + wander * 1.08f));
-    colorPhase += 0.03f + (bandMidS * 0.08f) + (beatBloom * 0.02f);
+    driftPhase += tempoRate(0.06f, 0.22f) + (bandBassS * (0.16f + wander * 0.34f)) + (volSmooth * 0.05f);
+    branchPhase += tempoRate(0.04f, 0.16f) + (bandMidS * (0.14f + wander * 0.26f));
+    sporePhase += tempoRate(0.05f, 0.22f) + (bandHighS * (0.18f + wander * 0.28f));
+    colorPhase += tempoRate(0.01f, 0.05f) + (bandMidS * 0.02f) + (beatBloom * 0.01f);
 
     if (beatDetected) beatBloom = 1.0f;
     else beatBloom = lerpf(beatBloom, 0.0f, 0.09f);
@@ -70,26 +70,47 @@ void Mode_PsilocybinWander::render() {
         float focus = clamp01(1.0f - (fabsf((float)t - focusTube) / lerpf(7.5f, 2.8f, wander)));
         focus = powf(focus, 1.30f);
 
-        float course = sinf((driftPhase * 0.48f) + (t * lerpf(0.16f, 0.58f, wander)) + (localField * 2.9f));
-        float swell = sinf((branchPhase * 0.90f) - (t * lerpf(0.10f, 0.32f, wander)) + (localBand * 3.6f));
-        float fruiting = sinf(colorPhase + (t * 0.33f));
-        uint8_t fruitTint = (uint8_t)constrain((int)lroundf(122.0f + (fruiting * 76.0f)), 0, 255);
+        uint8_t threadNoise = inoise8(
+            t * 42 + (int)(driftPhase * 18.0f),
+            540 + (int)(branchPhase * 14.0f),
+            millis() / 13
+        );
+        uint8_t branchNoise = inoise8(
+            t * 58 + 1200 + (int)(branchPhase * 20.0f),
+            1820,
+            millis() / 11
+        );
+        uint8_t rootNoise = inoise8(
+            t * 34 + 2100 - (int)(driftPhase * 16.0f),
+            2580,
+            millis() / 15
+        );
+        uint8_t fruitNoise = inoise8(
+            t * 72 + (int)(colorPhase * 30.0f),
+            3220,
+            millis() / 17
+        );
+        float threadDrift = ((float)threadNoise - 128.0f) / 128.0f;
+        float branchDrift = ((float)branchNoise - 128.0f) / 128.0f;
+        float rootDrift = ((float)rootNoise - 128.0f) / 128.0f;
+        float fruitDrift = ((float)fruitNoise - 128.0f) / 128.0f;
+        uint8_t fruitTint = (uint8_t)constrain((int)lroundf(118.0f + (fruitDrift * 84.0f)), 0, 255);
 
         float threadYNorm = clamp01(
-            0.46f
-            + (course * (0.14f + wander * 0.17f))
-            + (swell * (0.07f + wander * 0.10f))
+            0.44f
+            + (threadDrift * (0.13f + wander * 0.16f))
+            + (branchDrift * (0.06f + wander * 0.08f))
             + (focus * 0.10f)
-            + (bandBassS * 0.10f)
+            + (bandBassS * 0.08f)
         );
         float threadY = lerpf(0.8f, H - 1.7f, threadYNorm);
         float branchY = constrain(
-            threadY + (sinf(branchPhase + (t * 0.45f)) * (0.8f + wander * 1.5f)) - 0.7f + (focus * 0.55f),
+            threadY + (branchDrift * (0.8f + wander * 1.4f)) - 0.5f + (focus * 0.45f),
             0.4f,
             (float)(H - 1)
         );
         float rootY = constrain(
-            threadY - (1.2f + (cosf(driftPhase + (t * 0.28f)) * (0.45f + wander * 0.45f))),
+            threadY - (1.0f + ((rootDrift + 1.0f) * (0.35f + wander * 0.40f))),
             0.0f,
             (float)(H - 1)
         );
@@ -101,7 +122,7 @@ void Mode_PsilocybinWander::render() {
 
         for (int y = 0; y < H; ++y) {
             float vertical = (float)y / (float)(H - 1);
-            CRGB baseMist = blend(theme.root, theme.moss, (uint8_t)constrain((int)lroundf(50.0f + (fruiting * 40.0f) + (vertical * 70.0f)), 0, 255));
+            CRGB baseMist = blend(theme.root, theme.moss, (uint8_t)constrain((int)lroundf(50.0f + (fruitDrift * 40.0f) + (vertical * 70.0f)), 0, 255));
             CRGB color = blend(theme.abyss, baseMist, (uint8_t)(40 + (vertical * 60.0f) + (focus * 56.0f)));
 
             uint8_t curtain = inoise8(

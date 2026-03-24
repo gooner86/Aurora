@@ -19,8 +19,17 @@ namespace ModeManager {
     }
 
     void render() {
+        if (currentPower == PowerState::STANDBY) {
+            fill_solid(leds, NUM_LEDS, CRGB::Black);
+            for (int i = 0; i < NUM_LEDS; ++i) {
+                lastFrame[i] = CRGB::Black;
+            }
+            frameHistoryValid = false;
+            return;
+        }
+
         // Ensure mode is valid to avoid out-of-range lookups
-        if (ACTIVE_MODE_INT < 0 || ACTIVE_MODE_INT > 10) {
+        if (ACTIVE_MODE_INT < 0 || ACTIVE_MODE_INT > 11) {
             ACTIVE_MODE_INT = 0;
         }
         // 1. Run the actual Render logic for the selected mode
@@ -36,6 +45,7 @@ namespace ModeManager {
             case 8: Mode_DeepOcean::render();   break;
             case 9: Mode_IbizaSunset::render(); break;
             case 10: Mode_PsilocybinWander::render(); break;
+            case 11: Mode_TempoTest::render(); break;
             default: Mode_AuroraV1::render();   break;
         }
 

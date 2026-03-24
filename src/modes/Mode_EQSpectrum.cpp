@@ -1,44 +1,73 @@
 #include "Mode_EQSpectrum.h"
 #include "../State.h"
 
+#include <math.h>
+
 namespace Mode_EQSpectrum {
     void render() {
-        static float displayLevel[TUBES] = {0};
-        static float peakLevel[TUBES] = {0};
-        static uint32_t peakHoldTime[TUBES] = {0};
-        uint32_t now = millis();
+        static float fluidLevel[TUBES] = {0};
+        static float fluidVelocity[TUBES] = {0};
+
+        // Stretch the full sensitivity range so minimum barely tickles the floor
+        // and maximum can happily drive the bars into the red.
         float sensNorm = clamp01((MASTER_SENSITIVITY - 0.05f) / (3.0f - 0.05f));
-        float deadZone = lerpf(0.14f, 0.03f, sensNorm);
-        float gain = lerpf(0.95f, 1.25f, sensNorm);
-        float responseCurve = lerpf(1.85f, 1.20f, sensNorm);
+        float displaySens = powf(sensNorm, 0.52f);
+        float deadZone = lerpf(0.48f, 0.01f, displaySens);
+        float gain = lerpf(0.18f, 3.10f, displaySens);
+        float responseCurve = lerpf(3.00f, 0.82f, displaySens);
+        float springRise = lerpf(0.38f, 0.62f, displaySens);
+        float springFall = lerpf(0.14f, 0.24f, displaySens);
+        float dampingRise = lerpf(0.58f, 0.72f, displaySens);
+        float dampingFall = lerpf(0.78f, 0.88f, displaySens);
+        float settleRise = lerpf(0.18f, 0.28f, displaySens);
+        float settleFall = lerpf(0.04f, 0.10f, displaySens);
+        float bodyBrightness = lerpf(190.0f, 255.0f, displaySens);
 
         fill_solid(leds, NUM_LEDS, CRGB::Black);
-        for (int t = 0; t < TUBES; t++) {
-            float fast = tubeBandFast(t);
-            float smooth = tubeBand(t);
-            float rawTarget = max(smooth * 0.90f, fast * 1.10f);
-            float target = clamp01((rawTarget - deadZone) * gain);
+
+        for (int t = 0; t < TUBES; ++t) {
+            float smoothBand = tubeBandSplit(t);
+            float fastBand = tubeBandSplitFast(t);
+            float transient = max(0.0f, fastBand - smoothBand);
+            float base = (smoothBand * 0.46f) + (transient * 0.90f);
+            float raw = max(base, fastBand * 1.08f);
+
+            float target = clamp01((raw - deadZone) * gain);
             target = powf(target, responseCurve);
 
-            float attack = 0.72f;
-            float release = 0.30f;
-            float k = (target > displayLevel[t]) ? attack : release;
-            displayLevel[t] += (target - displayLevel[t]) * k;
+            // Upward motion should feel pumped, while the fall should feel fluid and calm.
+            bool rising = target > fluidLevel[t];
+            float force = (target - fluidLevel[t]) * (rising ? springRise : springFall);
+            fluidVelocity[t] = (fluidVelocity[t] + force) * (rising ? dampingRise : dampingFall);
+            fluidLevel[t] = constrain(fluidLevel[t] + fluidVelocity[t], 0.0f, 1.08f);
+            fluidLevel[t] = lerpf(fluidLevel[t], target, rising ? settleRise : settleFall);
 
-            if (displayLevel[t] > peakLevel[t]) {
-                peakLevel[t] = displayLevel[t];
-                peakHoldTime[t] = now;
-            } else if ((now - peakHoldTime[t]) > 140) {
-                peakLevel[t] = max(displayLevel[t], peakLevel[t] - 0.075f);
+            if (fluidLevel[t] < 0.002f && target < 0.002f && fabsf(fluidVelocity[t]) < 0.002f) {
+                fluidLevel[t] = 0.0f;
+                fluidVelocity[t] = 0.0f;
             }
 
-            float surf = displayLevel[t] * H;
-            for (int y = 0; y < H; y++) {
-                uint8_t val = barBrightness(surf, y);
-                if (val > 0) leds[idx(t, y)] = CHSV(map(y, 0, H-1, 96, 0), 255, val);
+            float surf = fluidLevel[t] * (float)H;
+            for (int y = 0; y < H; ++y) {
+                float depth = surf - (float)y;
+                uint8_t hue = map(y, 0, H - 1, 96, 0);
+
+                if (depth > -0.35f) {
+                    float body = clamp01(depth);
+                    float meniscus = 1.0f - clamp01(fabsf(depth) / 0.75f);
+                    float brightness = (body * 0.78f) + (meniscus * 0.34f);
+                    brightness = clamp01(brightness);
+
+                    if (brightness > 0.0f) {
+                        CRGB color = CHSV(hue, 255, (uint8_t)(bodyBrightness * brightness));
+                        if (meniscus > 0.0f) {
+                            CRGB cap = CHSV(qsub8(hue, 8), 210, (uint8_t)(150.0f * meniscus));
+                            color += cap;
+                        }
+                        leds[idx(t, y)] = color;
+                    }
+                }
             }
-            int peakY = (int)(peakLevel[t] * H);
-            if (peakY >= 0 && peakY < H) leds[idx(t, peakY)] = CRGB::White;
         }
     }
 }

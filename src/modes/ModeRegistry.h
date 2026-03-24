@@ -12,3 +12,4 @@
 #include "Mode_RainbowFlow.h"
 #include "Mode_SolidColor.h"
 #include "Mode_PsilocybinWander.h"
+#include "Mode_TempoTest.h"

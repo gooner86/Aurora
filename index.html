@@ -126,13 +126,14 @@
         <option value="1">EQ SPECTRUM</option>
         <option value="2">VACUUM TUBE</option>
         <option value="3">AURORA V2</option>
-        <option value="4">RAINBOW FLOW</option>
+        <option value="4">1986</option>
         <option value="5">COLOR VEIL</option>
         <option value="6">AURORA V3</option>
         <option value="7">NIGHT RAIN</option>
         <option value="8">DEEP OCEAN</option>
         <option value="9">IBIZA SUNSET</option>
         <option value="10">PSILOCYBIN WANDER</option>
+        <option value="11">RAINBOW FLOW</option>
         </select>
       </div>
       <div class="viz-preview mode-raw" id="vizPreview" aria-label="Mode colour preview">
@@ -142,12 +143,29 @@
       </div>
     </div>
     <div class="glass-card">
-      <label>Master Brightness <span id="valBright" class="val-readout">90</span></label>
-      <input type="range" id="brightSlider" min="5" max="255" value="90" oninput="updateVal('valBright', this.value)" onchange="sendBrightness()">
+      <label>Aurora State</label>
+      <div class="select-wrapper">
+        <select id="powerSelect">
+          <option value="AWAKE">Awake</option>
+          <option value="STANDBY">Standby</option>
+        </select>
+      </div>
+      <label style="margin-top:15px;">Audio Input</label>
+      <div class="select-wrapper">
+        <select id="sourceSelect">
+          <option value="MIC">Mic</option>
+          <option value="LINE">Line In</option>
+          <option value="OFF">Off</option>
+        </select>
+      </div>
+    </div>
+    <div class="glass-card">
+      <label>Master Brightness <span id="valBright" class="val-readout">34%</span></label>
+      <input type="range" id="brightSlider" min="5" max="255" value="90" oninput="updateBrightnessReadout(this.value)" onchange="sendBrightness()">
     </div>
     <div class="glass-card" id="contextPanel">
-      <label>Audio Sensitivity <span id="valSens" class="val-readout">1.0</span></label>
-      <input type="range" id="sensSlider" min="0.05" max="3.0" step="0.05" value="1.0" oninput="updateVal('valSens', this.value); updateSensitivity()" onchange="updateSensitivity()">
+      <label>Audio Sensitivity <span id="valSens" class="val-readout">32%</span></label>
+      <input type="range" id="sensSlider" min="0.05" max="3.0" step="0.05" value="1.0" oninput="updateSensitivityReadout(this.value); updateSensitivity()" onchange="updateSensitivity()">
     </div>
     <div class="glass-card hidden" id="colorPanel">
       <label>Veil Tint</label>
@@ -169,6 +187,7 @@
       <input type="range" id="voyagePalette" min="0" max="100" value="58" oninput="updateVal('valVoyageLucidity', this.value); sendVoyageSettings()" onchange="sendVoyageSettings()">
     </div>
     <button class="btn-disconnect" onclick="disconnectBLE()">Disconnect Device</button>
+    <div id="bleStatus" class="val-readout" style="margin-top:14px; display:block;">BLE: Disconnected</div>
   </div>
 <script>
   const serviceUUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
@@ -178,24 +197,152 @@
     sens: "92e42d8c-792f-4122-861f-1335b7193230",
     color: "0f60c1a0-3333-4444-8888-abcdefabcdef",
     voyage: "6a7b8c90-5555-4444-8888-112233445566",
-    sleep: "a7913500-1111-4444-8888-999999999999"
+    power: "f0b5a001-1111-4444-8888-aaaabbbbcccc",
+    source: "f0b5a002-1111-4444-8888-aaaabbbbcccc",
+    command: "a7913500-1111-4444-8888-999999999999"
   };
   const MODES = {
     0: { family:"aurora" }, // V1
     1: { family:"raw" },    // EQ
     2: { family:"aurora" }, // Tube
     3: { family:"aurora" }, // V2
-    4: { family:"raw" },    // Rainbow
+    4: { family:"raw" },    // 1986
       5: { family:"aurora" }, // Color Veil
     6: { family:"aurora" }, // V3
     7: { family:"aurora" }, // Rain
     8: { family:"aurora" }, // Ocean
     9: { family:"aurora" }, // Ibiza
-    10: { family:"aurora" } // Psilocybin Wander
+    10: { family:"aurora" }, // Psilocybin Wander
+    11: { family:"raw" } // Rainbow Flow
   };
   let device, server, service, charMap = {};
   let currentMode = 1;
+  const bleDecoder = new TextDecoder();
+  function setBleStatus(text) {
+    const el = document.getElementById('bleStatus');
+    if (el) el.innerText = `BLE: ${text}`;
+  }
   function updateVal(id,val){ document.getElementById(id).innerText = val; }
+  function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+  function uiPercent(value, min, max) {
+    const num = Number(value);
+    if (!Number.isFinite(num) || max <= min) return 0;
+    return Math.round(clamp01((num - min) / (max - min)) * 100);
+  }
+  function brightnessPercent(value) { return uiPercent(value, 5, 255); }
+  function sensitivityPercent(value) { return uiPercent(value, 0.05, 3.0); }
+  function updateBrightnessReadout(value) { updateVal('valBright', `${brightnessPercent(value)}%`); }
+  function updateSensitivityReadout(value) { updateVal('valSens', `${sensitivityPercent(value)}%`); }
+  function applyModeSelection(modeValue) {
+    const m = parseInt(modeValue, 10);
+    if (!Number.isFinite(m)) return;
+    currentMode = m;
+    document.getElementById('modeSelect').value = String(m);
+    document.getElementById('colorPanel').classList.toggle('hidden', m !== 5);
+    document.getElementById('voyagePanel').classList.toggle('hidden', m !== 10);
+    setPreview(m);
+  }
+  function applySystemState(stateText) {
+    if (!stateText) return;
+    const parts = stateText.split('|');
+    const state = Object.fromEntries(parts.map((part) => part.split(':')));
+    if (state.PWR) document.getElementById('powerSelect').value = state.PWR;
+    if (state.SRC) document.getElementById('sourceSelect').value = state.SRC;
+  }
+  async function readCharString(key) {
+    if (!charMap[key]) return null;
+    try {
+      const raw = await charMap[key].readValue();
+      return new TextDecoder().decode(raw).trim();
+    } catch (err) {
+      console.warn(`Read failed for ${key}`, err);
+      return null;
+    }
+  }
+  function handleCharacteristicUpdate(key, value) {
+    if (key === 'bright') {
+      const bright = parseInt(value, 10);
+      if (Number.isFinite(bright)) {
+        document.getElementById('brightSlider').value = bright;
+        updateBrightnessReadout(bright);
+      }
+      return;
+    }
+    if (key === 'sens') {
+      const sens = parseFloat(value);
+      if (Number.isFinite(sens)) {
+        document.getElementById('sensSlider').value = sens;
+        updateSensitivityReadout(sens);
+      }
+      return;
+    }
+    if (key === 'mode') {
+      applyModeSelection(value);
+      return;
+    }
+    if (key === 'power') {
+      if (value === 'AWAKE' || value === 'STANDBY') {
+        document.getElementById('powerSelect').value = value;
+      }
+      return;
+    }
+    if (key === 'source') {
+      if (value === 'MIC' || value === 'LINE' || value === 'OFF') {
+        document.getElementById('sourceSelect').value = value;
+      }
+      return;
+    }
+    if (key === 'command') {
+      applySystemState(value);
+    }
+  }
+  async function subscribeToLiveUpdates() {
+    const liveKeys = ['mode', 'bright', 'sens', 'power', 'source', 'command'];
+    for (const key of liveKeys) {
+      const characteristic = charMap[key];
+      if (!characteristic || !characteristic.startNotifications) continue;
+      try {
+        await characteristic.startNotifications();
+        characteristic.addEventListener('characteristicvaluechanged', (event) => {
+          const value = bleDecoder.decode(event.target.value).trim();
+          handleCharacteristicUpdate(key, value);
+        });
+      } catch (err) {
+        console.warn(`Notification setup failed for ${key}`, err);
+      }
+    }
+  }
+  async function syncUiFromDevice() {
+    const modeText = await readCharString('mode');
+    if (modeText) {
+      applyModeSelection(modeText);
+    }
+
+    const brightText = await readCharString('bright');
+    if (brightText) {
+      const bright = parseInt(brightText, 10);
+      if (Number.isFinite(bright)) document.getElementById('brightSlider').value = bright;
+    }
+    updateBrightnessReadout(document.getElementById('brightSlider').value);
+
+    const sensText = await readCharString('sens');
+    if (sensText) {
+      const sens = parseFloat(sensText);
+      if (Number.isFinite(sens)) document.getElementById('sensSlider').value = sens;
+    }
+    updateSensitivityReadout(document.getElementById('sensSlider').value);
+
+    const powerText = await readCharString('power');
+    if (powerText) document.getElementById('powerSelect').value = powerText;
+
+    const sourceText = await readCharString('source');
+    if (sourceText) document.getElementById('sourceSelect').value = sourceText;
+
+    if (!powerText || !sourceText) {
+      const commandText = await readCharString('command');
+      applySystemState(commandText);
+    }
+  }
   async function connectBLE(){
     try{
       const btn = document.querySelector('.btn-hero');
@@ -212,6 +359,9 @@
         try { charMap[k] = await service.getCharacteristic(chars[k]); }
         catch(e) { charMap[k] = null; }
       }
+      const available = Object.keys(charMap).filter((key) => !!charMap[key]);
+      const missing = Object.keys(charMap).filter((key) => !charMap[key]);
+      setBleStatus(missing.length ? `Connected. Missing: ${missing.join(', ')}` : `Connected. Ready: ${available.join(', ')}`);
       const landing = document.getElementById('landing-view');
       const app = document.getElementById('app-view');
       landing.style.opacity = '0';
@@ -220,10 +370,12 @@
         app.style.display = 'block';
         setTimeout(() => app.classList.add('visible'), 50);
       }, 500);
-      changeMode();
+      await subscribeToLiveUpdates();
+      await syncUiFromDevice();
       setTimeout(() => btn.innerText = "Connect", 1000);
     } catch(err){
       console.error(err);
+      setBleStatus('Connect failed');
       document.querySelector('.btn-hero').innerText = "Failed / Retry";
     }
   }
@@ -232,6 +384,7 @@
     else onDisconnected();
   }
   function onDisconnected() {
+    setBleStatus('Disconnected');
     const landing = document.getElementById('landing-view');
     const app = document.getElementById('app-view');
     app.classList.remove('visible');
@@ -241,7 +394,28 @@
     }, 300);
   }
   async function writeChar(key, val) {
-    if (charMap[key]) await charMap[key].writeValue(new TextEncoder().encode(String(val)));
+    if (!charMap[key]) {
+      setBleStatus(`Missing characteristic: ${key}`);
+      return false;
+    }
+    await charMap[key].writeValue(new TextEncoder().encode(String(val)));
+    setBleStatus(`Sent ${key}: ${val}`);
+    return true;
+  }
+  async function writeCharWithFallback(primaryKey, primaryValue, fallbackKey, fallbackValue) {
+    try {
+      const wrotePrimary = await writeChar(primaryKey, primaryValue);
+      if (wrotePrimary) return true;
+    } catch (err) {
+      console.warn(`Primary write failed for ${primaryKey}`, err);
+    }
+    if (!fallbackKey) return false;
+    try {
+      return await writeChar(fallbackKey, fallbackValue);
+    } catch (err) {
+      console.warn(`Fallback write failed for ${fallbackKey}`, err);
+      return false;
+    }
   }
   function setPreview(mode) {
     const meta = MODES[mode] || { family:"raw" };
@@ -253,26 +427,28 @@
       1: [20,30,45,60,78,68,54,40,30,22,18], // EQ
       2: [62,62,62,62,62,62,62,62,62,62,62], // Tube
       3: [55,72,60,78,52,76,58,74,50,70,54], // V2
-      4: [30,40,52,64,76,64,52,40,30,22,18], // Rainbow
+      4: [22,34,46,58,66,74,62,50,38,30,22], // 1986
       5: [28,34,42,56,68,76,68,56,42,34,28], // Color Veil
       6: [30,44,58,70,78,72,60,48,36,28,22], // V3
       7: [18,22,26,20,30,24,28,22,26,20,18], // Rain
       8: [26,34,42,50,62,68,60,48,40,32,26], // Ocean
       9: [22,28,36,48,62,74,62,48,36,28,22], // Ibiza
-      10: [16,26,40,58,76,84,72,56,38,24,14] // Psilocybin Wander
+      10: [16,26,40,58,76,84,72,56,38,24,14], // Psilocybin Wander
+      11: [16,28,40,56,72,84,70,54,38,24,14] // Rainbow Flow
     };
     const gradients = {
       0: ["#050014","#003314","#00ff7a","#8a2be2","#ffd0ff"], // V1
       1: ["#00ff00","#ccff00","#ffb000","#ff2a00","#ff0000"], // EQ
       2: ["#120000","#ff3d00","#ff8a00","#ffd0a6","#ffffff"], // Tube
       3: ["#020018","#3b0070","#00ffd5","#ff146e","#ffffff"], // V2
-      4: ["#ff0066","#ffcc00","#00ffcc","#0066ff","#bd00ff"], // Rainbow
+      4: ["#0b0016","#ff0054","#ff7a00","#00c8ff","#5300ff"], // 1986
       5: ["#050812","#08223a","#0da89a","#b6f6f0","#fff6df"], // Color Veil
       6: ["#030018","#1b00ff","#00ff8c","#b000ff","#ffe0ff"], // V3
       7: ["#000015","#002040","#6aa0ff","#b8d5ff","#ffffff"], // Rain
       8: ["#00000a","#00112a","#003a55","#00b9a7","#b3f0ff"], // Ocean
       9: ["#000514","#3a0020","#ff4d00","#ffb000","#3a0058"], // Ibiza
-      10: ["#06000f","#22122d","#34be80","#f08a2e","#defff6"]  // Psilocybin Wander
+      10: ["#06000f","#22122d","#34be80","#f08a2e","#defff6"],  // Psilocybin Wander
+      11: ["#2b00ff","#0088ff","#00ffd5","#e6ff00","#ff4d00"] // Rainbow Flow
     };
     const stops = gradients[mode] || gradients[1];
     const hs = heights[mode] || heights[1];
@@ -305,10 +481,7 @@
   }
   async function changeMode(){
     const m = parseInt(document.getElementById('modeSelect').value);
-    currentMode = m;
-    document.getElementById('colorPanel').classList.toggle('hidden', m !== 5);
-    document.getElementById('voyagePanel').classList.toggle('hidden', m !== 10);
-    setPreview(m);
+    applyModeSelection(m);
     await writeChar('mode', m);
   }
   async function sendBrightness(){
@@ -317,6 +490,18 @@
   async function updateSensitivity(){
     const s = document.getElementById('sensSlider').value;
     await writeChar('sens', s);
+  }
+  async function sendPowerState(){
+    const state = document.getElementById('powerSelect').value;
+    handleCharacteristicUpdate('power', state);
+    await writeChar('command', `PWR:${state}`);
+    await writeChar('power', state);
+  }
+  async function sendAudioSource(){
+    const source = document.getElementById('sourceSelect').value;
+    handleCharacteristicUpdate('source', source);
+    await writeChar('command', `SRC:${source}`);
+    await writeChar('source', source);
   }
   async function sendSolidColor(){
     const hex = document.getElementById('solidColor').value;
@@ -332,5 +517,12 @@
     if (currentMode === 10) setPreview(10);
   }
   window.addEventListener('DOMContentLoaded', () => {
-    setPreview(parseInt(document.getElementById('modeSelect').value));
+    updateBrightnessReadout(document.getElementById('brightSlider').value);
+    updateSensitivityReadout(document.getElementById('sensSlider').value);
+    applyModeSelection(document.getElementById('modeSelect').value);
+    document.getElementById('powerSelect').addEventListener('change', sendPowerState);
+    document.getElementById('powerSelect').addEventListener('input', sendPowerState);
+    document.getElementById('sourceSelect').addEventListener('change', sendAudioSource);
+    document.getElementById('sourceSelect').addEventListener('input', sendAudioSource);
+    setBleStatus('Disconnected');
   });</script></body></html>

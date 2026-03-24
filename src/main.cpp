@@ -40,9 +40,11 @@ CRGB lastFrame[NUM_LEDS];
 
 uint8_t bandBass8           = 0;
 float tubeBandsInstant[TUBES] = {0};
+float tubeBandsSplitInstant[TUBES] = {0};
 float tubeLevel[TUBES]       = {0};
 float tubePeak[TUBES]        = {0};
 float tubeBandsSmooth[TUBES] = {0};
+float tubeBandsSplitSmooth[TUBES] = {0};
 float tubeMax[TUBES]         = {0};
 
 float bandBassS = 0.0f, bandMidS = 0.0f, bandHighS = 0.0f;
@@ -53,6 +55,11 @@ float bassEnergy = 0.0f, midEnergy = 0.0f, highEnergy = 0.0f;
 float beatThreshold = 1.30f;
 bool beatDetected = false;
 uint32_t lastBeatTime = 0;
+float beatPulse = 0.0f;
+float tempoBPM = 0.0f;
+float tempoConfidence = 0.0f;
+float tempoNormalized = 0.0f;
+uint32_t beatIntervalMs = 0;
 
 // Debounced settings save flag (set by BLE/UI, persisted by main loop)
 bool settingsDirty = false;
@@ -119,21 +126,13 @@ void setup() {
 
 void loop() {
     OTAUpdater::tick();
-
-    
-    // DEBUG: Print Volume Levels to Serial
-    static uint32_t lastVoiceTick = 0;
-    if (millis() - lastVoiceTick > 500) {
-        Serial.print("Mic Volume (volSmooth): ");
-        Serial.println(volSmooth); 
-        lastVoiceTick = millis();
-    }
     
     // Throttled UI/Input to save CPU for the FFT
     static uint32_t lastSlowTick = 0;
     if (millis() - lastSlowTick > 40) {
         PhysicalControls::tick(); 
         DisplayController::update();
+        BLEController::tick();
         lastSlowTick = millis();
     }
 

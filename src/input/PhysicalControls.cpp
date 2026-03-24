@@ -6,10 +6,16 @@ namespace PhysicalControls {
     int lastBrightRaw = -1;
     int lastSensRaw = -1;
     int lastSensValue = -1;
+    int brightnessPickupTargetRaw = -1;
+    int sensitivityPickupTargetRaw = -1;
+    int brightnessNeutralRaw = -1;
+    int sensitivityNeutralRaw = -1;
     const int BRIGHTNESS_NOISE_THRESHOLD = 40;
     const int SENSITIVITY_NOISE_THRESHOLD = 20;
     const int PICKUP_WINDOW = 96;
     const int PICKUP_CONFIRM_TICKS = 3;
+    const int BRIGHTNESS_FORCE_CAPTURE_DISTANCE = 260;
+    const int SENSITIVITY_FORCE_CAPTURE_DISTANCE = 180;
     // Smoothing state for ADC to reduce jitter
     static float smoothedBrightRaw = -1.0f;
     static float smoothedSensRaw = -1.0f;
@@ -43,14 +49,35 @@ namespace PhysicalControls {
         return (int)lroundf(ratio * 4095.0f);
     }
 
+    static void applyBrightnessRaw(int raw) {
+        uint8_t val = rawToBrightness(raw);
+        if (val != USER_BRIGHTNESS || val != globalBrightness) {
+            USER_BRIGHTNESS = val;
+            globalBrightness = val;
+            settingsDirty = true;
+        }
+    }
+
+    static void applySensitivityRaw(int raw) {
+        float newSensitivity = rawToSensitivity(raw);
+        int displaySens = (int)lroundf(newSensitivity * 10.0f);
+        MASTER_SENSITIVITY = newSensitivity;
+        if (displaySens != lastSensValue) {
+            lastSensValue = displaySens;
+            settingsDirty = true;
+        }
+    }
+
     void init() {
         pinMode(PIN_POT_BRIGHTNESS, INPUT);
         pinMode(PIN_POT_SENSITIVITY, INPUT);
         pinMode(PIN_ENC1_SW, INPUT_PULLUP);
         pinMode(PIN_ENC2_SW, INPUT_PULLUP);
 
-        // Seed the analog smoothing with the current runtime settings so
-        // the pots do not override BLE/saved values until they are moved into range.
+        // Start from the real hardware position so soft-takeover logic can
+        // detect when the user moves the pot through the current saved value.
+        smoothedBrightRaw = (float)analogRead(PIN_POT_BRIGHTNESS);
+        smoothedSensRaw = (float)analogRead(PIN_POT_SENSITIVITY);
         setBrightnessFromRemote(USER_BRIGHTNESS);
         setSensitivityFromRemote(MASTER_SENSITIVITY);
     }
@@ -69,32 +96,38 @@ namespace PhysicalControls {
         smoothedSensRaw = (smoothedSensRaw * (1.0f - alpha)) + (sensRaw * alpha);
 
         int smoothBrightInt = (int)lroundf(smoothedBrightRaw);
-        int targetBrightRaw = brightnessToRaw(USER_BRIGHTNESS);
+        int targetBrightRaw = (brightnessPickupTargetRaw >= 0) ? brightnessPickupTargetRaw : brightnessToRaw(USER_BRIGHTNESS);
         if (!brightnessCaptured) {
-            if (abs(smoothBrightInt - targetBrightRaw) <= PICKUP_WINDOW) {
+            bool inPickupWindow = abs(smoothBrightInt - targetBrightRaw) <= PICKUP_WINDOW;
+            bool movedDeliberately = (brightnessNeutralRaw >= 0) &&
+                (abs(smoothBrightInt - brightnessNeutralRaw) >= BRIGHTNESS_FORCE_CAPTURE_DISTANCE);
+            if (inPickupWindow) {
                 brightnessPickupTicks++;
                 if (brightnessPickupTicks >= PICKUP_CONFIRM_TICKS) {
                     brightnessCaptured = true;
                     lastBrightRaw = smoothBrightInt;
                     brightnessPickupTicks = 0;
                 }
+            } else if (movedDeliberately) {
+                brightnessCaptured = true;
+                lastBrightRaw = smoothBrightInt;
+                brightnessPickupTicks = 0;
+                applyBrightnessRaw(smoothBrightInt);
             } else {
                 brightnessPickupTicks = 0;
             }
         } else if (abs(smoothBrightInt - lastBrightRaw) > BRIGHTNESS_NOISE_THRESHOLD) {
             lastBrightRaw = smoothBrightInt;
-            uint8_t val = rawToBrightness(smoothBrightInt);
-            if (val != USER_BRIGHTNESS || val != globalBrightness) {
-                USER_BRIGHTNESS = val;
-                globalBrightness = val;
-                settingsDirty = true;
-            }
+            applyBrightnessRaw(smoothBrightInt);
         }
 
         int smoothSensInt = (int)lroundf(smoothedSensRaw);
-        int targetSensRaw = sensitivityToRaw(MASTER_SENSITIVITY);
+        int targetSensRaw = (sensitivityPickupTargetRaw >= 0) ? sensitivityPickupTargetRaw : sensitivityToRaw(MASTER_SENSITIVITY);
         if (!sensitivityCaptured) {
-            if (abs(smoothSensInt - targetSensRaw) <= PICKUP_WINDOW) {
+            bool inPickupWindow = abs(smoothSensInt - targetSensRaw) <= PICKUP_WINDOW;
+            bool movedDeliberately = (sensitivityNeutralRaw >= 0) &&
+                (abs(smoothSensInt - sensitivityNeutralRaw) >= SENSITIVITY_FORCE_CAPTURE_DISTANCE);
+            if (inPickupWindow) {
                 sensitivityPickupTicks++;
                 if (sensitivityPickupTicks >= PICKUP_CONFIRM_TICKS) {
                     sensitivityCaptured = true;
@@ -102,34 +135,33 @@ namespace PhysicalControls {
                     lastSensValue = (int)lroundf(MASTER_SENSITIVITY * 10.0f);
                     sensitivityPickupTicks = 0;
                 }
+            } else if (movedDeliberately) {
+                sensitivityCaptured = true;
+                lastSensRaw = smoothSensInt;
+                sensitivityPickupTicks = 0;
+                applySensitivityRaw(smoothSensInt);
             } else {
                 sensitivityPickupTicks = 0;
             }
         } else if (abs(smoothSensInt - lastSensRaw) > SENSITIVITY_NOISE_THRESHOLD) {
             lastSensRaw = smoothSensInt;
-            float newSensitivity = rawToSensitivity(smoothSensInt);
-            int displaySens = (int)lroundf(newSensitivity * 10.0f);
-            MASTER_SENSITIVITY = newSensitivity;
-            if (displaySens != lastSensValue) {
-                lastSensValue = displaySens;
-                settingsDirty = true;
-            }
+            applySensitivityRaw(smoothSensInt);
         }
     }
 
     void setBrightnessFromRemote(uint8_t val) {
-        int raw = brightnessToRaw(val);
-        smoothedBrightRaw = (float)raw;
-        lastBrightRaw = raw;
+        brightnessPickupTargetRaw = brightnessToRaw(val);
+        brightnessNeutralRaw = (smoothedBrightRaw >= 0.0f) ? (int)lroundf(smoothedBrightRaw) : analogRead(PIN_POT_BRIGHTNESS);
+        lastBrightRaw = -1;
         brightnessCaptured = false;
         brightnessPickupTicks = 0;
     }
 
     void setSensitivityFromRemote(float sens) {
         float s = constrain(sens, 0.05f, 3.0f);
-        int raw = sensitivityToRaw(s);
-        smoothedSensRaw = (float)raw;
-        lastSensRaw = raw;
+        sensitivityPickupTargetRaw = sensitivityToRaw(s);
+        sensitivityNeutralRaw = (smoothedSensRaw >= 0.0f) ? (int)lroundf(smoothedSensRaw) : analogRead(PIN_POT_SENSITIVITY);
+        lastSensRaw = -1;
         lastSensValue = (int)lroundf(s * 10.0f);
         sensitivityCaptured = false;
         sensitivityPickupTicks = 0;

@@ -13,7 +13,7 @@ namespace Mode_NightRain {
             if (!tubeActive[t] && random8() < (2 + (int)(tubeBandsSmooth[t] * 70))) {
                 tubeActive[t] = true;
                 dropPos[t] = (float)(H - 1);
-                dropSpeed[t] = 0.06f + (bandBassS * 0.18f);
+                dropSpeed[t] = tempoRate(0.05f, 0.16f) + (bandBassS * 0.06f);
             }
             if (tubeActive[t]) {
                 dropPos[t] -= dropSpeed[t];

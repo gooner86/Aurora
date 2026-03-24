@@ -10,4 +10,7 @@ namespace LineInput {
     
     // The function that grabs the raw audio data
     bool readSamples(int32_t* buffer, size_t numSamples);
+
+    // Decode one raw I2S word into a signed sample the analyzer can use.
+    int32_t decodeSample(int32_t raw);
 }
